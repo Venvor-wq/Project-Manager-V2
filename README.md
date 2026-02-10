@@ -1,170 +1,100 @@
-# Project Organizer (PyQt6 + WebEngine)
+````md
+# Project Organizer
 
-A clean, offline **desktop launcher** to organize **After Effects** and **coding projects** (plus Video/3D/Design).  
-Built with **PyQt6 WebEngine** as host + a modern **HTML/CSS/JS** UI with **GSAP** animations and a subtle **Three.js** background.
+Desktop project launcher for managing **After Effects** and **development projects** in one searchable library.  
+UI is rendered via **PyQt6 WebEngine** (local HTML) with **GSAP** animations and a subtle **Three.js** background.
 
----
-
-## ✨ Features
+## Features
 
 ### Projects
-- Add projects via **folder picker** (and best-effort Drag & Drop in Qt WebEngine)
-- **Auto-detect project type**
-  - After Effects: `.aep` / `.aepx` → picks newest as **main file**
+- Add projects by selecting a folder
+- Automatic type detection:
+  - After Effects: `.aep` / `.aepx` (newest file becomes `main_file`)
   - Coding: `.git`, `package.json`, `pyproject.toml`, `requirements.txt`, `pom.xml`, `build.gradle`, `CMakeLists.txt`, …
-  - Video / 3D / Design (basic detection) or fallback: Other
-- **Search** across title, tags, notes, path and type
-- **Filters** by type + status
-- **Grid / List** view toggle
-- Detail panel:
-  - Edit title
-  - Change type + status
-  - Tags (chips)
-  - Notes
-- Quick Actions:
-  - Open folder
-  - Open main file (or folder)
-  - Copy path
-  - Delete project
+  - Video / 3D / Design (basic detection), fallback to `Other`
+- Fast search across title, tags, notes, path, type
+- Filters (type + status)
+- Grid/List view
+- Detail panel: edit title, type, status, tags, notes
+- Quick actions: open folder, open project (main file), copy path, delete
 
 ### Ideas
-- Built-in **Ideas / Notes** tab
-- Search + edit + delete
-- Ctrl+Enter to save (optional)
+- Separate Ideas tab for notes/concepts
+- Create, edit, search, delete
 
 ### Settings
-- Themes:
-  - Dark (default)
-  - Light
-  - Purple Dark
-- Backup Sync:
-  - Select a backup folder
-  - On startup: projects can be mirrored to that folder
-  - “Run Sync Now” from settings
+- Themes: Dark / Light / Purple Dark
+- Optional backup sync (mirror projects into a backup folder)
 
-### UI / Visuals
-- **GSAP** micro-interactions (staggered list loads, panel transitions, toasts)
-- **Three.js** subtle background particles + wireframe orb (low-power)
+## Requirements
 
----
+- Python 3.10+ recommended
+- Dependencies:
+  - `PyQt6`
+  - `PyQt6-WebEngine`
 
-## 🧱 Tech Stack
-
-- **Python 3**
-- **PyQt6**
-- **PyQt6-WebEngine**
-- Frontend: **HTML/CSS/JS**, **GSAP**, **Three.js**
-- Storage: **SQLite** (`./data/projects.db`)
-- Settings: JSON (`./data/settings.json`)
-
----
-
-## ✅ Requirements
-
-- Python **3.10+** recommended
-- Windows / macOS / Linux (opening files uses OS-specific methods)
-
-Install dependencies:
+Install:
 
 ```bash
 pip install PyQt6 PyQt6-WebEngine
+````
 
-🚀 Run
+## Run
 
-Make sure these files are in the same folder:
+Make sure these files are in the same directory:
 
-    Launcher.py
+* `Launcher.py`
+* `Launcher.html`
 
-    Launcher.html
+Start:
 
-Start the app:
-
+```bash
 python Launcher.py
+```
 
-📁 Data / Files Created
+## Data Storage
 
-On first run, a data/ folder will be created next to the script:
+All data is stored locally in `./data/`:
 
-    data/projects.db → SQLite database (projects + ideas)
+* `data/projects.db` — SQLite (projects + ideas)
+* `data/settings.json` — UI/theme/view/filters + backup folder
+* Optional JSON exports (if used)
 
-    data/settings.json → theme, view, filters, backup settings
+## Backup Sync
 
-    data/backup_*.json → optional export (if used)
+If a backup folder is configured in Settings, the app can mirror each project folder into:
 
-🔍 Project Type Detection (Overview)
-
-Detection priority:
-
-    AE → finds .aep/.aepx (newest becomes main_file)
-
-    Coding → detects .git or common build markers
-
-    Video → common video/project extensions
-
-    3D → .blend/.fbx/.obj/.c4d/...
-
-    Design → .psd/.ai/.fig/.sketch/...
-
-    Other
-
-Max scan depth: MAX_SCAN_DEPTH = 4 (can be adjusted in Launcher.py)
-🛠️ Backup Sync (How it works)
-
-If you choose a backup folder in Settings → Backup Sync, the app can mirror each project folder into:
-
+```
 <backupRoot>/<projectTitle>_<hash>/
+```
 
-    Only changed files are copied (size/mtime comparison)
+Behavior:
 
-    Extra files in backup are removed (mirror behavior)
+* Copies only changed files (size/mtime comparison)
+* Removes files/folders in backup that no longer exist in the source (mirror)
+* Prevents recursion if the backup folder is inside a project directory
 
-    The app avoids recursion (won’t back up if backup folder is inside the project)
+## Configuration
 
-    Tip: Put the backup folder on an external drive or cloud-synced directory if you want off-device redundancy.
+Detection and scan behavior can be adjusted in `Launcher.py`:
 
-🧩 Customize
-Add more coding markers / file types
+* `MAX_SCAN_DEPTH` — folder scan depth (default: 4)
+* Marker sets:
 
-Edit these in Launcher.py:
+  * `CODING_MARKERS`
+  * `VIDEO_EXTS`
+  * `THREE_D_EXTS`
+  * `DESIGN_EXTS`
 
-    CODING_MARKERS
+## Platform Notes
 
-    VIDEO_EXTS
+Opening folders/files:
 
-    THREE_D_EXTS
+* Windows: `os.startfile`
+* macOS: `open`
+* Linux: `xdg-open`
 
-    DESIGN_EXTS
+Drag & drop folder paths can be limited by Qt WebEngine depending on OS; the folder picker is the reliable method.
 
-Adjust scan performance
-
-    MAX_SCAN_DEPTH
-
-🐞 Notes / Known Limitations
-
-    Drag & Drop folder paths can be limited by Qt WebEngine depending on OS/permissions. The Add Folder button is always reliable.
-
-    Three.js background is intentionally subtle and runs in low-power mode.
-
-📜 License
-
-Choose a license for your repo (MIT is a solid default).
-Add a LICENSE file if you want it to be explicitly open-source.
-📸 Screenshots
-
-(Add screenshots/gifs here)
-
-    Projects grid
-
-    Detail panel
-
-    Ideas tab
-
-    Theme switching
-
-🙌 Credits
-
-    GSAP: GreenSock Animation Platform
-
-    Three.js: 3D WebGL library
-
-    PyQt6 WebEngine: Chromium-based embedded browser for desktop apps
+## License
+/
