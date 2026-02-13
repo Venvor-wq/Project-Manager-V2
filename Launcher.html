@@ -1,277 +1,3681 @@
 
 <!DOCTYPE html>
-
-
-
 <html lang="en">
-
-
-
-
-
-
 <head>
-  <script type="text/javascript">
-    
-    const currentTheme = localStorage.getItem("theme")
-    if (currentTheme) {
-      
-      const prefersDarkScheme = window.matchMedia("(prefers-color-scheme: dark)").matches
-      if (prefersDarkScheme === (currentTheme === "dark")) localStorage.removeItem("theme")
-      else if ((prefersDarkScheme && currentTheme === "light")
-        || (!prefersDarkScheme && currentTheme === "dark")) {
-	document.documentElement.dataset.theme = currentTheme
-      }
-    }
-  </script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Organizer</title>
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+/* ─── Reset & Base ────────────────────────────────────────────────── */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0a0a;--panel:#111;--panel2:#181818;--text:#f0f0f0;--muted:#666;
+  --border:#222;--accent:#fff;--accent-dim:rgba(255,255,255,.08);
+  --shadow:0 2px 20px rgba(0,0,0,.5);--radius:12px;--radius-sm:8px;
+  --card-bg:#141414;--hover-bg:#1a1a1a;--badge-bg:#222;
+  --accent-rgb:255,255,255;--three-color:#ffffff;--three-fog:#0a0a0a;
+  --toast-bg:#1a1a1a;--titlebar-h:38px;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',Helvetica,Arial,sans-serif;
+  font-size:14px;color:var(--text);background:var(--bg);
+  -webkit-font-smoothing:antialiased;
+}
 
-  <meta charset='utf-8'>
-  <meta content='IE=edge,chrome=1' http-equiv='X-UA-Compatible'>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+/* Themes */
+[data-theme="light"]{
+  --bg:#f5f5f7;--panel:#fff;--panel2:#f0f0f2;--text:#1d1d1f;--muted:#86868b;
+  --border:#d2d2d7;--accent:#1d1d1f;--accent-dim:rgba(0,0,0,.04);
+  --shadow:0 2px 20px rgba(0,0,0,.08);--card-bg:#fff;--hover-bg:#f8f8fa;
+  --badge-bg:#e8e8ed;--accent-rgb:29,29,31;--three-color:#1d1d1f;
+  --three-fog:#f5f5f7;--toast-bg:#fff;
+}
+[data-theme="purple"]{
+  --bg:#0d0b12;--panel:#13111a;--panel2:#1a1724;--text:#e8e4f0;--muted:#6b6280;
+  --border:#2a2540;--accent:#a78bfa;--accent-dim:rgba(167,139,250,.08);
+  --shadow:0 2px 20px rgba(0,0,0,.5);--card-bg:#16131f;--hover-bg:#1e1a2a;
+  --badge-bg:#241f35;--accent-rgb:167,139,250;--three-color:#a78bfa;
+  --three-fog:#0d0b12;--toast-bg:#1a1724;
+}
 
-  <title>Git - Install for Windows</title>
+html,body{height:100%;overflow:hidden;background:var(--bg)}
 
-  <link href="/favicon.ico" rel='shortcut icon' type='image/x-icon'>
+/* ─── Layout ──────────────────────────────────────────────────────── */
+#app{display:flex;height:calc(100vh - var(--titlebar-h));margin-top:var(--titlebar-h);position:relative;z-index:1}
 
-  
-  <link rel="stylesheet" href="/application.min.49e8684daa501c7171b36c71100b12c8c528472d5d700dc19ff92be7f8f2ed6a.css" integrity="sha256-SehoTapQHHFxs2xxEAsSyMUoRy1dcA3Bn/kr5/jy7Wo=">
-  <script src="/js/modernizr.js"></script>
-  
+/* Custom Window Titlebar */
+#window-titlebar{
+  height:var(--titlebar-h);
+  border-bottom:1px solid var(--border);
+  background:var(--panel);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 8px 0 12px;
+  user-select:none;
+  -webkit-user-select:none;
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
+  z-index:12;
+}
+.window-title-left{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+.window-title-left svg{width:14px;height:14px;color:var(--muted)}
+.window-title-text{
+  font-size:12px;
+  color:var(--muted);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.window-actions{display:flex;align-items:center;gap:4px}
+.window-btn{
+  width:30px;height:24px;border:none;border-radius:6px;background:transparent;
+  color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;
+  transition:all .12s;
+}
+.window-btn:hover{background:var(--accent-dim);color:var(--text)}
+.window-btn svg{width:14px;height:14px}
+.window-btn-close:hover{background:rgba(239,68,68,.22);color:#ef4444}
+#win-max-btn .icon-restore{display:none}
+#win-max-btn.is-max .icon-maximize{display:none}
+#win-max-btn.is-max .icon-restore{display:block}
 
+/* Three.js Canvas */
+#three-canvas{position:fixed;top:0;left:0;width:1px;height:1px;z-index:0;pointer-events:none}
+
+/* Sidebar */
+#sidebar{
+  width:220px;min-width:220px;background:var(--panel);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:20px 16px;gap:24px;z-index:2;
+  position:relative;overflow-y:auto;
+}
+#sidebar::-webkit-scrollbar{width:0}
+.sidebar-logo{display:flex;align-items:center;gap:10px;padding:4px 0 0 0}
+.sidebar-logo svg{width:28px;height:28px;color:var(--accent)}
+.sidebar-logo span{font-size:15px;font-weight:600;letter-spacing:-.3px}
+
+.filter-section{display:flex;flex-direction:column;gap:6px}
+.filter-label{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);padding:0 8px;margin-bottom:2px}
+.filter-btn{
+  display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--radius-sm);
+  border:none;background:transparent;color:var(--text);cursor:pointer;font-size:13px;
+  transition:background .15s;text-align:left;width:100%;
+}
+.filter-btn:hover{background:var(--accent-dim)}
+.filter-btn.active{background:var(--accent-dim);font-weight:600}
+.filter-btn svg{width:16px;height:16px;flex-shrink:0;color:var(--muted)}
+.filter-btn.active svg{color:var(--accent)}
+.filter-count{margin-left:auto;font-size:11px;color:var(--muted);min-width:18px;text-align:right}
+.sidebar-ideas-list{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  max-height:calc(100vh - 210px);
+  overflow-y:auto;
+  padding-right:2px;
+}
+.idea-sidebar-item{
+  border:1px solid var(--border);
+  background:var(--panel2);
+  color:var(--text);
+  border-radius:var(--radius-sm);
+  padding:8px 10px;
+  font-size:12px;
+  line-height:1.35;
+  text-align:left;
+  cursor:pointer;
+  transition:all .15s;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.idea-sidebar-item:hover{
+  border-color:rgba(var(--accent-rgb),.35);
+  background:var(--hover-bg);
+}
+.idea-sidebar-item.active{
+  border-color:rgba(var(--accent-rgb),.6);
+  box-shadow:0 0 0 1px rgba(var(--accent-rgb),.35) inset;
+}
+.idea-sidebar-empty{
+  font-size:12px;
+  color:var(--muted);
+  padding:4px 2px;
+}
+
+/* Main */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;z-index:2}
+
+/* Topbar */
+#topbar{
+  display:flex;align-items:center;gap:12px;padding:14px 24px;
+  border-bottom:1px solid var(--border);background:var(--panel);
+  position:relative;z-index:10;min-height:56px;
+}
+#search-wrap{
+  position:relative;flex:1;max-width:400px;
+}
+#search-input{
+  width:100%;padding:8px 12px 8px 36px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);background:var(--panel2);color:var(--text);
+  font-size:13px;outline:none;
+  transition:border-color .2s, box-shadow .2s, background-color .2s;
+}
+#search-input:focus{
+  border-color:rgba(var(--accent-rgb),.55);
+  box-shadow:0 0 0 1px rgba(var(--accent-rgb),.24), 0 0 18px rgba(var(--accent-rgb),.2);
+  animation:searchGlowPulse 1.8s ease-in-out infinite;
+}
+#search-input::placeholder{color:var(--muted)}
+#search-icon{
+  position:absolute;left:10px;top:50%;transform:translateY(-50%);
+  color:var(--muted);width:16px;height:16px;
+  transition:color .2s, transform .2s;
+}
+#search-wrap:focus-within #search-icon{
+  color:var(--accent);
+  transform:translateY(-50%) scale(1.08);
+}
+.kbd-hint{
+  position:absolute;right:10px;top:50%;transform:translateY(-50%);
+  font-size:10px;color:var(--muted);background:var(--panel);
+  padding:2px 6px;border-radius:4px;border:1px solid var(--border);pointer-events:none;
+}
+@keyframes searchGlowPulse{
+  0%,100%{box-shadow:0 0 0 1px rgba(var(--accent-rgb),.22), 0 0 12px rgba(var(--accent-rgb),.16)}
+  50%{box-shadow:0 0 0 1px rgba(var(--accent-rgb),.35), 0 0 24px rgba(var(--accent-rgb),.26)}
+}
+
+.topbar-tabs{display:flex;align-items:center;gap:6px}
+.top-tab{
+  border:1px solid var(--border);background:var(--panel2);color:var(--muted);
+  border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;
+  transition:all .15s;
+}
+.top-tab:hover{color:var(--text);border-color:rgba(var(--accent-rgb),.35)}
+.top-tab.active{
+  color:var(--bg);background:var(--accent);border-color:var(--accent);
+}
+
+.topbar-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;padding:7px 14px;
+  border-radius:var(--radius-sm);border:1px solid var(--border);
+  background:var(--panel2);color:var(--text);cursor:pointer;font-size:13px;
+  font-weight:500;transition:all .15s;white-space:nowrap;
+}
+.btn:hover{background:var(--hover-bg);border-color:rgba(var(--accent-rgb),.3)}
+.btn svg{width:15px;height:15px}
+.btn-primary{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.btn-primary:hover{opacity:.85}
+.btn-icon{padding:7px 8px;border:1px solid var(--border);background:var(--panel2);border-radius:var(--radius-sm);cursor:pointer;color:var(--text);display:flex;align-items:center;justify-content:center}
+.btn-icon:hover{background:var(--hover-bg)}
+.btn-icon svg{width:16px;height:16px}
+
+/* Tabs */
+.tab-panel{display:none;flex:1;min-height:0}
+.tab-panel.active{display:flex}
+
+/* Content Area (Projects Tab) */
+#content-area{display:flex;flex:1;overflow:hidden;position:relative}
+#grid-wrap{flex:1;overflow-y:auto;padding:20px 24px;position:relative}
+#grid-wrap::-webkit-scrollbar{width:6px}
+#grid-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+#grid-wrap::-webkit-scrollbar-track{background:transparent}
+
+/* Settings Tab */
+#settings-tab{
+  overflow-y:auto;
+  padding:24px;
+}
+#settings-tab::-webkit-scrollbar{width:6px}
+#settings-tab::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+#settings-tab::-webkit-scrollbar-track{background:transparent}
+#settings-wrap{
+  width:min(860px,100%);
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+.settings-card{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:20px;
+  box-shadow:var(--shadow);
+}
+.settings-title{
+  font-size:16px;
+  font-weight:700;
+  margin-bottom:4px;
+}
+.settings-subtitle{
+  font-size:12px;
+  color:var(--muted);
+  margin-bottom:14px;
+}
+.theme-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  gap:10px;
+}
+.theme-card{
+  border:1px solid var(--border);
+  background:var(--panel2);
+  border-radius:var(--radius-sm);
+  color:var(--text);
+  padding:12px;
+  text-align:left;
+  cursor:pointer;
+  transition:all .15s;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.theme-card:hover{
+  border-color:rgba(var(--accent-rgb),.35);
+  background:var(--hover-bg);
+}
+.theme-card.active{
+  border-color:rgba(var(--accent-rgb),.6);
+  box-shadow:0 0 0 1px rgba(var(--accent-rgb),.35) inset;
+}
+.theme-preview{
+  height:42px;
+  border-radius:6px;
+  border:1px solid var(--border);
+  overflow:hidden;
+  display:flex;
+}
+.theme-preview::before,
+.theme-preview::after{
+  content:'';
+  display:block;
+}
+.theme-preview::before{width:32%}
+.theme-preview::after{width:68%}
+.theme-preview-dark::before{background:#0a0a0a}
+.theme-preview-dark::after{background:#171717}
+.theme-preview-light::before{background:#ffffff}
+.theme-preview-light::after{background:#f2f2f5}
+.theme-preview-purple::before{background:#0d0b12}
+.theme-preview-purple::after{background:#1b1726}
+.theme-name{font-size:13px;font-weight:600}
+.theme-desc{font-size:11px;color:var(--muted)}
+.settings-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.settings-list{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.settings-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.settings-row-text{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.settings-row-title{
+  font-size:13px;
+  font-weight:600;
+}
+.settings-row-desc{
+  font-size:11px;
+  color:var(--muted);
+}
+.settings-select{
+  min-width:170px;
+  padding:8px 10px;
+  padding-right:34px;
+  border-radius:var(--radius-sm);
+  border:1px solid var(--border);
+  background:var(--panel2);
+  appearance:none;
+  -webkit-appearance:none;
+  -moz-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2386868b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 10px center;
+  background-size:12px 12px;
+  color:var(--text);
+  font-size:12px;
+  outline:none;
+}
+.settings-select:focus{
+  border-color:rgba(var(--accent-rgb),.35);
+}
+.switch{
+  position:relative;
+  width:46px;
+  height:26px;
+  border:none;
+  border-radius:999px;
+  background:var(--badge-bg);
+  cursor:pointer;
+  transition:background .16s ease;
+}
+.switch::after{
+  content:'';
+  position:absolute;
+  top:3px;
+  left:3px;
+  width:20px;
+  height:20px;
+  border-radius:50%;
+  background:#fff;
+  box-shadow:0 1px 3px rgba(0,0,0,.25);
+  transition:transform .16s ease;
+}
+.switch.active{
+  background:rgba(var(--accent-rgb),.65);
+}
+.switch.active::after{
+  transform:translateX(20px);
+}
+.backup-row{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  margin-bottom:10px;
+}
+#backup-folder-input{
+  flex:1;
+  min-width:180px;
+  padding:8px 10px;
+  border-radius:var(--radius-sm);
+  border:1px solid var(--border);
+  background:var(--panel2);
+  color:var(--text);
+  font-size:12px;
+  outline:none;
+}
+#backup-folder-input::placeholder{color:var(--muted)}
+#backup-sync-state{
+  margin-top:4px;
+  font-size:12px;
+  color:var(--muted);
+}
+:root.reduced-motion *,
+:root.reduced-motion *::before,
+:root.reduced-motion *::after{
+  transition:none !important;
+  animation:none !important;
+}
+
+/* Ideas Tab */
+#ideas-tab{
+  overflow:hidden;
+  padding:24px;
+}
+#ideas-layout{
+  width:min(1100px, 100%);
+  height:100%;
+  display:grid;
+  grid-template-columns:minmax(280px, 360px) minmax(0, 1fr);
+  gap:14px;
+}
+.idea-panel{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:16px;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+}
+.ideas-list-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  margin-bottom:10px;
+}
+.ideas-list-title{
+  font-size:16px;
+  font-weight:700;
+}
+#idea-search-input{
+  width:100%;
+  padding:8px 10px;
+  border-radius:var(--radius-sm);
+  border:1px solid var(--border);
+  background:var(--panel2);
+  color:var(--text);
+  font-size:12px;
+  outline:none;
+}
+#idea-search-input:focus{
+  border-color:rgba(var(--accent-rgb),.35);
+}
+#idea-list{
+  margin-top:10px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  overflow-y:auto;
+  min-height:0;
+}
+.idea-item{
+  width:100%;
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  background:var(--panel2);
+  color:var(--text);
+  padding:10px;
+  text-align:left;
+  cursor:pointer;
+  transition:all .15s;
+}
+.idea-item:hover{
+  border-color:rgba(var(--accent-rgb),.35);
+  background:var(--hover-bg);
+}
+.idea-item.active{
+  border-color:rgba(var(--accent-rgb),.65);
+  box-shadow:0 0 0 1px rgba(var(--accent-rgb),.35) inset;
+}
+.idea-item-title{
+  font-size:13px;
+  font-weight:600;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.idea-item-body{
+  margin-top:4px;
+  font-size:11px;
+  color:var(--muted);
+  line-height:1.4;
+  max-height:32px;
+  overflow:hidden;
+}
+.idea-item-meta{
+  margin-top:6px;
+  font-size:10px;
+  color:var(--muted);
+}
+.idea-empty{
+  display:none;
+  margin-top:12px;
+  font-size:12px;
+  color:var(--muted);
+}
+.idea-form{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  flex:1;
+  min-height:0;
+}
+.idea-field{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.idea-field label{
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.8px;
+  color:var(--muted);
+}
+.idea-field input,
+.idea-field textarea{
+  padding:9px 10px;
+  border-radius:var(--radius-sm);
+  border:1px solid var(--border);
+  background:var(--panel2);
+  color:var(--text);
+  font-size:13px;
+  font-family:inherit;
+  outline:none;
+  transition:border-color .2s;
+}
+.idea-field input:focus,
+.idea-field textarea:focus{
+  border-color:rgba(var(--accent-rgb),.35);
+}
+#idea-content-input{
+  resize:vertical;
+  min-height:220px;
+  flex:1;
+}
+.idea-editor-head{
+  margin-bottom:10px;
+}
+.idea-editor-title{
+  font-size:16px;
+  font-weight:700;
+}
+.idea-editor-sub{
+  margin-top:4px;
+  font-size:12px;
+  color:var(--muted);
+}
+.idea-actions{
+  margin-top:12px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+@media (max-width: 1100px){
+  #ideas-layout{
+    grid-template-columns:1fr;
+  }
+}
+
+/* Startup Loader */
+#startup-loader{
+  position:fixed;
+  inset:0;
+  z-index:10000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(8,8,8,.88);
+  backdrop-filter:blur(6px);
+}
+#startup-loader.hidden{
+  opacity:0;
+  pointer-events:none;
+}
+.loader-card{
+  width:min(560px,92vw);
+  border:1px solid var(--border);
+  border-radius:16px;
+  background:var(--panel);
+  box-shadow:var(--shadow);
+  padding:20px;
+}
+.loader-head{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:10px;
+}
+.loader-spinner{
+  width:20px;
+  height:20px;
+  border-radius:50%;
+  border:2px solid rgba(var(--accent-rgb),.25);
+  border-top-color:var(--accent);
+  animation:spin 0.9s linear infinite;
+}
+.loader-title{
+  font-size:15px;
+  font-weight:700;
+}
+.loader-status{
+  font-size:13px;
+  color:var(--text);
+  min-height:20px;
+}
+.loader-progress-track{
+  margin-top:10px;
+  height:6px;
+  border-radius:999px;
+  background:var(--panel2);
+  border:1px solid var(--border);
+  overflow:hidden;
+}
+.loader-progress{
+  width:0%;
+  height:100%;
+  background:linear-gradient(90deg, rgba(var(--accent-rgb),.45), rgba(var(--accent-rgb),.95));
+  transition:width .2s ease;
+}
+.loader-log{
+  margin-top:10px;
+  max-height:130px;
+  overflow:auto;
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  font-size:11px;
+  color:var(--muted);
+}
+@keyframes spin{
+  from{transform:rotate(0deg)}
+  to{transform:rotate(360deg)}
+}
+
+/* Grid */
+.project-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:14px;
+}
+.project-list{display:flex;flex-direction:column;gap:6px}
+.project-list .project-card{
+  display:flex;align-items:center;gap:14px;padding:12px 16px;
+}
+.project-list .card-thumb{width:44px;height:44px;min-width:44px;border-radius:var(--radius-sm)}
+.project-list .card-body{flex:1;display:flex;align-items:center;gap:12px}
+.project-list .card-title{margin-bottom:0}
+.project-list .card-meta{display:flex;align-items:center;gap:8px;margin:0}
+.project-list .card-tags{display:none}
+
+/* Card */
+.project-card{
+  background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px;cursor:pointer;position:relative;overflow:hidden;
+  transition:border-color .2s;
+}
+.project-card:hover{border-color:rgba(var(--accent-rgb),.25)}
+.project-card.selected{border-color:rgba(var(--accent-rgb),.5);background:var(--hover-bg)}
+.card-thumb{
+  width:100%;height:120px;background:var(--panel2);border-radius:var(--radius-sm);
+  margin-bottom:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;
+}
+.card-thumb svg{width:36px;height:36px;color:var(--muted);opacity:.5}
+.card-thumb-image{
+  width:100%;
+  height:100%;
+  display:block;
+  object-fit:cover;
+}
+.card-body{}
+.card-title{font-size:14px;font-weight:600;margin-bottom:6px;line-height:1.3;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-meta{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.badge{
+  font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;
+  padding:3px 8px;border-radius:20px;background:var(--badge-bg);color:var(--muted);
+}
+.badge-type{color:var(--accent);background:var(--accent-dim)}
+.badge-status{}
+.card-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.tag{font-size:10px;padding:2px 7px;border-radius:10px;background:var(--accent-dim);color:var(--muted)}
+.card-date{font-size:11px;color:var(--muted);margin-top:8px}
+.card-kebab-wrap{
+  position:absolute;
+  right:10px;
+  bottom:10px;
+  z-index:4;
+}
+.card-kebab-btn{
+  width:28px;
+  height:28px;
+  border:1px solid var(--border);
+  background:var(--panel2);
+  color:var(--muted);
+  border-radius:8px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  transition:all .12s;
+}
+.card-kebab-btn:hover,
+.card-kebab-wrap.open .card-kebab-btn{
+  color:var(--text);
+  border-color:rgba(var(--accent-rgb),.35);
+  background:var(--hover-bg);
+}
+.card-kebab-btn svg{
+  width:14px;
+  height:14px;
+}
+.card-kebab-menu{
+  position:absolute;
+  right:0;
+  bottom:34px;
+  min-width:156px;
+  display:none;
+  flex-direction:column;
+  gap:3px;
+  padding:6px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:var(--panel);
+  box-shadow:var(--shadow);
+}
+.card-kebab-wrap.open .card-kebab-menu{
+  display:flex;
+}
+.card-kebab-item{
+  width:100%;
+  border:1px solid transparent;
+  background:var(--panel2);
+  color:var(--text);
+  border-radius:7px;
+  font-size:12px;
+  text-align:left;
+  padding:7px 8px;
+  cursor:pointer;
+  transition:all .12s;
+}
+.card-kebab-item:hover{
+  border-color:rgba(var(--accent-rgb),.3);
+  background:var(--hover-bg);
+}
+.card-kebab-item:disabled{
+  cursor:not-allowed;
+  opacity:.6;
+}
+.card-kebab-item.danger{
+  color:#ef4444;
+  border-color:rgba(239,68,68,.2);
+}
+.card-kebab-item.danger:hover{
+  background:rgba(239,68,68,.1);
+  border-color:rgba(239,68,68,.4);
+}
+
+/* Empty State */
+#empty-state{
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;gap:16px;color:var(--muted);text-align:center;padding:40px;
+}
+#empty-state svg{width:64px;height:64px;opacity:.3}
+#empty-state p{font-size:14px;max-width:300px;line-height:1.5}
+
+/* Detail Panel */
+#detail-panel{
+  width:360px;max-width:86vw;overflow:hidden;border-left:1px solid var(--border);
+  background:var(--panel);display:flex;flex-direction:column;
+  position:absolute;top:0;right:0;bottom:0;z-index:6;
+  transform:translateX(100%);transition:transform .22s ease;
+  pointer-events:none;
+  box-shadow:-10px 0 30px rgba(0,0,0,.2);
+}
+#detail-panel.open{transform:translateX(0);pointer-events:auto}
+#detail-content{padding:24px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:20px}
+#detail-content::-webkit-scrollbar{width:4px}
+#detail-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+.detail-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.detail-close{
+  background:none;border:none;color:var(--muted);cursor:pointer;padding:4px;
+  border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.detail-close:hover{background:var(--accent-dim);color:var(--text)}
+.detail-close svg{width:18px;height:18px}
+#detail-title{
+  font-size:18px;font-weight:700;background:none;border:none;color:var(--text);
+  outline:none;width:100%;padding:0;border-bottom:1px solid transparent;
+  transition:border-color .2s;letter-spacing:-.3px;line-height:1.3;
+}
+#detail-title:focus{border-bottom-color:rgba(var(--accent-rgb),.3)}
+
+.detail-field{display:flex;flex-direction:column;gap:6px}
+.detail-field label{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)}
+.detail-field select,
+.detail-field textarea{
+  padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);
+  background:var(--panel2);color:var(--text);font-size:13px;font-family:inherit;
+  outline:none;resize:vertical;transition:border-color .2s;
+}
+.detail-field select{
+  appearance:none;
+  -webkit-appearance:none;
+  -moz-appearance:none;
+  padding-right:34px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2386868b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 10px center;
+  background-size:12px 12px;
+}
+.detail-field select::-ms-expand,
+.settings-select::-ms-expand{
+  display:none;
+}
+.detail-field select:focus,
+.detail-field textarea:focus{border-color:rgba(var(--accent-rgb),.3)}
+.detail-field textarea{min-height:100px}
+.detail-field select option,
+.settings-select option{
+  background:var(--panel2);
+  color:var(--text);
+}
+
+/* Tag Input */
+.tags-input-wrap{
+  display:flex;flex-wrap:wrap;gap:4px;padding:6px 8px;
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--panel2);cursor:text;min-height:36px;align-items:center;
+  transition:border-color .2s;
+}
+.tags-input-wrap:focus-within{border-color:rgba(var(--accent-rgb),.3)}
+.tag-chip{
+  display:flex;align-items:center;gap:3px;padding:2px 8px 2px 8px;
+  background:var(--accent-dim);border-radius:10px;font-size:11px;color:var(--text);
+}
+.tag-chip button{
+  background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;
+  padding:0;line-height:1;display:flex;align-items:center;
+}
+.tag-chip button:hover{color:var(--text)}
+#tag-input{
+  border:none;background:none;outline:none;color:var(--text);font-size:12px;
+  flex:1;min-width:60px;padding:2px 0;
+}
+#tag-input::placeholder{color:var(--muted)}
+
+.detail-info{display:flex;flex-direction:column;gap:8px}
+.info-row{display:flex;align-items:flex-start;gap:8px;font-size:12px}
+.info-row .info-label{color:var(--muted);min-width:60px;flex-shrink:0}
+.info-row .info-value{color:var(--text);word-break:break-all}
+
+.detail-actions{display:flex;gap:8px;flex-wrap:wrap;padding-top:4px}
+.detail-actions .btn{font-size:12px;flex:1}
+.open-in-modal-btn{
+  justify-content:center;
+  gap:7px;
+}
+
+/* Open In Modal */
+#open-in-overlay{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:11900;
+  background:rgba(6,6,10,.48);
+  backdrop-filter:blur(4px);
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+}
+#open-in-overlay.active{display:flex}
+#open-in-dialog{
+  width:min(720px,96vw);
+  border:1px solid var(--border);
+  border-radius:16px;
+  background:var(--panel);
+  box-shadow:var(--shadow);
+  overflow:hidden;
+}
+.open-in-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  padding:16px 18px 12px 18px;
+  border-bottom:1px solid var(--border);
+}
+.open-in-title-wrap{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+.open-in-title{
+  font-size:16px;
+  font-weight:700;
+}
+.open-in-sub{
+  font-size:12px;
+  color:var(--muted);
+}
+.open-in-close{
+  border:none;
+  background:transparent;
+  color:var(--muted);
+  border-radius:8px;
+  width:30px;
+  height:30px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+}
+.open-in-close:hover{
+  background:var(--accent-dim);
+  color:var(--text);
+}
+.open-in-close svg{width:16px;height:16px}
+.open-in-body{
+  padding:14px 18px 18px 18px;
+}
+#open-in-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  gap:10px;
+}
+.open-in-card{
+  border:1px solid var(--border);
+  background:var(--panel2);
+  border-radius:10px;
+  padding:11px;
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  text-align:left;
+  color:var(--text);
+  cursor:pointer;
+  transition:all .14s;
+}
+.open-in-card:hover{
+  border-color:rgba(var(--accent-rgb),.35);
+  background:var(--hover-bg);
+}
+.open-in-card:disabled{
+  cursor:not-allowed;
+  opacity:.62;
+}
+.open-in-icon{
+  width:28px;
+  height:28px;
+  border-radius:7px;
+  background:rgba(var(--accent-rgb),.08);
+  border:1px solid rgba(var(--accent-rgb),.18);
+  flex-shrink:0;
+  overflow:hidden;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.open-in-icon img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+.open-in-icon-fallback{
+  font-size:10px;
+  font-weight:700;
+  color:var(--text);
+  letter-spacing:.2px;
+}
+.open-in-meta{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.open-in-card-title{
+  font-size:12px;
+  font-weight:600;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.open-in-card-desc{
+  font-size:10px;
+  color:var(--muted);
+  line-height:1.3;
+}
+.open-in-badge{
+  margin-top:2px;
+  display:inline-flex;
+  width:max-content;
+  padding:2px 6px;
+  border-radius:999px;
+  font-size:10px;
+  font-weight:600;
+  background:rgba(239,68,68,.14);
+  color:#ef4444;
+  border:1px solid rgba(239,68,68,.35);
+}
+.open-in-empty{
+  grid-column:1 / -1;
+  padding:16px;
+  border-radius:10px;
+  border:1px dashed var(--border);
+  background:var(--panel2);
+  font-size:12px;
+  color:var(--muted);
+  text-align:center;
+}
+
+/* Toasts */
+#toast-container{
+  position:fixed;top:16px;right:16px;z-index:9999;
+  display:flex;flex-direction:column;gap:8px;pointer-events:none;
+}
+.toast{
+  background:var(--toast-bg);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:10px 16px;font-size:13px;
+  color:var(--text);pointer-events:auto;box-shadow:var(--shadow);
+  display:flex;align-items:center;gap:8px;max-width:340px;
+}
+.toast-error{border-color:rgba(239,68,68,.4);color:#ef4444}
+.toast svg{width:16px;height:16px;flex-shrink:0}
+.btn-danger{
+  color:#ef4444;
+  border-color:rgba(239,68,68,.35);
+}
+.btn-danger:hover{
+  background:rgba(239,68,68,.12);
+  border-color:rgba(239,68,68,.55);
+}
+
+/* Confirm Dialog */
+#confirm-overlay{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:12000;
+  background:rgba(6,6,10,.48);
+  backdrop-filter:blur(4px);
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+}
+#confirm-overlay.active{display:flex}
+#confirm-dialog{
+  width:min(420px,94vw);
+  border:1px solid var(--border);
+  border-radius:14px;
+  background:var(--panel);
+  box-shadow:var(--shadow);
+  padding:18px;
+}
+.confirm-title{
+  font-size:16px;
+  font-weight:700;
+  margin-bottom:8px;
+}
+.confirm-message{
+  font-size:13px;
+  color:var(--muted);
+  line-height:1.45;
+}
+.confirm-actions{
+  margin-top:16px;
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+}
+
+/* Spotlight */
+#spotlight-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;
+  align-items:flex-start;justify-content:center;padding-top:20vh;
+  backdrop-filter:blur(4px);
+}
+#spotlight-overlay.active{display:flex}
+#spotlight-box{
+  width:480px;background:var(--panel);border:1px solid var(--border);
+  border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;
+}
+#spotlight-input-wrap{
+  position:relative;
+  border-bottom:1px solid var(--border);
+  transition:border-color .2s, box-shadow .2s;
+}
+#spotlight-input-wrap:focus-within{
+  border-bottom-color:rgba(var(--accent-rgb),.7);
+  box-shadow:0 0 0 1px rgba(var(--accent-rgb),.24), 0 0 22px rgba(var(--accent-rgb),.2);
+  animation:searchGlowPulse 1.8s ease-in-out infinite;
+}
+#spotlight-search-icon{
+  position:absolute;
+  left:16px;
+  top:50%;
+  width:16px;
+  height:16px;
+  color:var(--muted);
+  transform:translateY(-50%);
+  pointer-events:none;
+  transition:color .2s, transform .2s;
+}
+#spotlight-input-wrap:focus-within #spotlight-search-icon{
+  color:var(--accent);
+  transform:translateY(-50%) scale(1.08);
+}
+#spotlight-input{
+  width:100%;padding:14px 18px 14px 42px;border:none;background:transparent;
+  color:var(--text);font-size:16px;outline:none;
+}
+#spotlight-input::placeholder{color:var(--muted)}
+#spotlight-results{max-height:320px;overflow-y:auto}
+.spotlight-item{
+  padding:10px 18px;cursor:pointer;display:flex;align-items:center;gap:10px;
+  font-size:13px;transition:background .1s;
+}
+.spotlight-item:hover,.spotlight-item.focused{background:var(--accent-dim)}
+.spotlight-item svg{width:16px;height:16px;color:var(--muted);flex-shrink:0}
+
+/* Scrollbar global */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* Drop Zone Overlay */
+#drop-overlay{
+  display:none;position:fixed;inset:0;z-index:200;
+  background:rgba(var(--accent-rgb),.06);
+  border:2px dashed rgba(var(--accent-rgb),.3);
+  align-items:center;justify-content:center;flex-direction:column;gap:12px;
+  pointer-events:none;
+}
+#drop-overlay.active{display:flex}
+#drop-overlay svg{width:48px;height:48px;color:var(--accent);opacity:.5}
+#drop-overlay p{font-size:15px;color:var(--accent);opacity:.7}
+</style>
 </head>
+<body>
 
-<body id="install">
+<canvas id="three-canvas"></canvas>
 
-  <div class="inner">
-    <header>
-  <a id="logo" href="/"><img src="/images/logo@2x.png" width="110" height="46" alt="Git" class="no-filter" /></a>
-  <span id="tagline"></span>
-  <script type="text/javascript">
-   const taglines = [
-     "fast-version-control",
-     "everything-is-local",
-     "distributed-even-if-your-workflow-isnt",
-     "local-branching-on-the-cheap",
-     "distributed-is-the-new-centralized"
-   ];
-   var tagline = taglines[Math.floor(Math.random() * taglines.length)];
-   document.getElementById('tagline').innerHTML = '--' + tagline;
-  </script>
-
-  
-  <div id="search-container">
-    <form id="search" action="/search/results">
-      <input id="search-text" name="search" placeholder="Type / to search entire site…" autocomplete="off" type="text" />
-    </form>
-    <div id="search-results"></div>
+<div id="window-titlebar">
+  <div class="window-title-left">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+    </svg>
+    <span class="window-title-text">Project Organizer</span>
   </div>
-  
-  <img src="/images/dark-mode.svg" id="dark-mode-button" />
-</header>
-
-  </div> 
-
-  
-    <div class="inner">
-      <div id="content-wrapper">
-        
-<div tabindex="1" class="sidebar-btn"></div>
-<aside class="sidebar" id="sidebar">
-  <nav>
-    <ul>
-      <li>
-        <a href="/about">About</a>
-        <ul >
-          <li>
-            <a href="/about/trademark">Trademark</a>
-          </li>
-        </ul>
-      </li>
-
-      <li>
-        <a href="/learn">Learn</a>
-        <ul >
-          <li>
-            <a href="/book">Book</a>
-          </li>
-          <li>
-            <a href="/cheat-sheet">Cheat Sheet</a>
-          </li>
-          <li>
-            <a href="/videos">Videos</a>
-          </li>
-          <li>
-            <a href="/doc/ext">External Links</a>
-          </li>
-        </ul>
-      </li>
-
-      <li>
-        <a href="/tools">Tools</a>
-        <ul >
-          <li>
-            <a href="/tools/command-line">Command Line</a>
-          </li>
-          <li>
-            <a href="/tools/guis">GUIs</a>
-          </li>
-          <li>
-            <a href="/tools/hosting">Hosting</a>
-          </li>
-        </ul>
-      </li>
-      <li>
-        <a href="/docs">Reference</a>
-      </li>
-      <li>
-        <a href="/install" class="install-link active">Install</a>
-      </li>
-      <li>
-        <a href="/community">Community</a>
-        <ul>
-          
-        </ul>
-      </li>
-    </ul>
-
-    
-    
-
-    
-      <hr class="sidebar">
-      <div class="callout">
-  <p>The entire <strong><a href="/book">Pro Git book</a></strong> written
-  by Scott Chacon and Ben Straub is available to <a href="/book">read online for free</a>.
-  Dead tree versions are available on <a href="https://www.amazon.com/Pro-Git-Scott-Chacon/dp/1484200772?ie=UTF8&camp=1789&creative=9325&creativeASIN=1430218339&linkCode=as2&tag=git-sfconservancy-20">Amazon.com</a>.
-  </p>
+  <div class="window-actions">
+    <button class="window-btn" id="win-min-btn" onclick="windowMinimize()" title="Minimize">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+    <button class="window-btn" id="win-max-btn" onclick="windowToggleMaximize()" title="Maximize / Restore">
+      <svg class="icon-maximize" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="1.5"/></svg>
+      <svg class="icon-restore" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 8h11v11H8z"/><path d="M5 16V5h11"/></svg>
+    </button>
+    <button class="window-btn window-btn-close" id="win-close-btn" onclick="windowClose()" title="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
 </div>
 
-    
-  </nav>
-</aside>
+<div id="startup-loader">
+  <div class="loader-card">
+    <div class="loader-head">
+      <span class="loader-spinner"></span>
+      <h2 class="loader-title">Preparing Project Organizer</h2>
+    </div>
+    <p class="loader-status" id="loader-status-text">Initialize launcher...</p>
+    <div class="loader-progress-track">
+      <div class="loader-progress" id="loader-progress-bar"></div>
+    </div>
+    <div class="loader-log" id="loader-log"></div>
+  </div>
+</div>
 
-        <div id="content" data-pagefind-filter="category:install" data-pagefind-weight="0.05" data-pagefind-body>
-          
-            
-<div id="main">
-  <div class="install">
-    <div class="install-header">
-      <h1>Install</h1>
-      <div class="version-badge">
-        Latest version: 2.53.0
-        (<a href="https://gitlab.com/git-scm/git/-/blob/HEAD/Documentation/RelNotes/2.53.0.adoc">Release Notes</a>)
+<div id="app" style="opacity:0">
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="sidebar-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+      </svg>
+      <span id="sidebar-title">Projects</span>
+    </div>
+
+    <!-- Type Filter -->
+    <div class="filter-section project-sidebar-section" id="type-filters">
+      <div class="filter-label">Type</div>
+      <button class="filter-btn active" data-filter-type="" onclick="setFilter('type','')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+        All <span class="filter-count" id="count-all">0</span>
+      </button>
+      <button class="filter-btn" data-filter-type="AE" onclick="setFilter('type','AE')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+        After Effects <span class="filter-count" id="count-AE">0</span>
+      </button>
+      <button class="filter-btn" data-filter-type="Coding" onclick="setFilter('type','Coding')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        Coding <span class="filter-count" id="count-Coding">0</span>
+      </button>
+      <button class="filter-btn" data-filter-type="Video" onclick="setFilter('type','Video')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>
+        Video <span class="filter-count" id="count-Video">0</span>
+      </button>
+      <button class="filter-btn" data-filter-type="3D" onclick="setFilter('type','3D')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 002 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        3D <span class="filter-count" id="count-3D">0</span>
+      </button>
+      <button class="filter-btn" data-filter-type="Design" onclick="setFilter('type','Design')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+        Design <span class="filter-count" id="count-Design">0</span>
+      </button>
+      <button class="filter-btn" data-filter-type="Other" onclick="setFilter('type','Other')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.32 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        Other <span class="filter-count" id="count-Other">0</span>
+      </button>
+    </div>
+
+    <!-- Status Filter -->
+    <div class="filter-section project-sidebar-section" id="status-filters">
+      <div class="filter-label">Status</div>
+      <button class="filter-btn active" data-filter-status="" onclick="setFilter('status','')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+        All
+      </button>
+      <button class="filter-btn" id="sidebar-ideas-link" onclick="openIdeasFromSidebar()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 01-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+        Ideas <span class="filter-count" id="count-ideas-notes">0</span>
+      </button>
+      <button class="filter-btn" data-filter-status="In Progress" onclick="setFilter('status','In Progress')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+        In Progress
+      </button>
+      <button class="filter-btn" data-filter-status="Done" onclick="setFilter('status','Done')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        Done
+      </button>
+      <button class="filter-btn" data-filter-status="Archived" onclick="setFilter('status','Archived')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+        Archived
+      </button>
+    </div>
+
+    <div class="filter-section" id="ideas-sidebar-section" style="display:none">
+      <div class="filter-label">Ideas</div>
+      <div id="ideas-sidebar-list" class="sidebar-ideas-list"></div>
+      <div id="ideas-sidebar-empty" class="idea-sidebar-empty" style="display:none">
+        No ideas yet.
       </div>
     </div>
-  
-    <nav class="install-tabs" role="tablist" aria-label="Installation options">
-      <a href="/install/windows"
-         role="tab" aria-current="page" aria-selected="true">
-        <span>Windows</span>
-      </a>
-      <a href="/install/mac"
-         role="tab" aria-selected="false">
-        <span>macOS</span>
-      </a>
-      <a href="/install/linux"
-         role="tab" aria-selected="false">
-        <span>Linux</span>
-      </a>
-      <a href="/install/source"
-         role="tab" aria-selected="false">
-        <span>Build from Source</span>
-      </a>
-    </nav>
+  </aside>
 
+  <!-- Main Area -->
+  <div id="main" data-tab="projects">
+    <!-- Topbar -->
+    <header id="topbar">
+      <div class="topbar-tabs">
+        <button class="top-tab active" data-tab="projects" onclick="setMainTab('projects')">Projects</button>
+        <button class="top-tab" data-tab="ideas" onclick="setMainTab('ideas')">Ideas</button>
+        <button class="top-tab" data-tab="settings" onclick="setMainTab('settings')">Settings</button>
+      </div>
+      <div id="search-wrap">
+        <svg id="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="search-input" type="text" placeholder="Search projects..." autocomplete="off" spellcheck="false">
+        <span class="kbd-hint">Ctrl K</span>
+      </div>
+      <div class="topbar-actions" id="project-actions">
+        <button class="btn btn-primary" id="btn-add" onclick="pickFolder()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add New Folder
+        </button>
+        <button class="btn-icon" id="btn-view-toggle" onclick="toggleView()" title="Toggle View">
+          <svg id="view-icon-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        </button>
+      </div>
+    </header>
 
-    <div class="install-content">
-  <p>
-  <strong><a id="auto-download-link" href="https://github.com/git-for-windows/git/releases/download/v2.53.0.windows.1/Git-2.53.0-64-bit.exe">Click here to download </a></strong>
-    the latest (<strong id="auto-download-version">2.53.0</strong>)
-    <strong id="auto-download-architecture">x64</strong> version of <strong>Git for Windows</strong>.
-    This is the most recent <a href="https://git-for-windows.github.io/">maintained build</a>.
-    It was released <span id="relative-release-date"></span>on <span id="auto-download-date">2026-02-02</span>.
-  </p>
-  <h3>Other Git for Windows downloads</h3>
-  <h4>Standalone Installer</h4>
-  <p>
-    <strong><a href="https://github.com/git-for-windows/git/releases/download/v2.53.0.windows.1/Git-2.53.0-64-bit.exe">Git for Windows/x64 Setup</a>.</strong>
-  </p>
-  <p>
-    <strong><a href="https://github.com/git-for-windows/git/releases/download/v2.53.0.windows.1/Git-2.53.0-arm64.exe">Git for Windows/ARM64 Setup</a>.</strong>
-  </p>
-  <h4>Portable ("thumbdrive edition")</h4>
-  <p>
-    <strong><a href="https://github.com/git-for-windows/git/releases/download/v2.53.0.windows.1/PortableGit-2.53.0-64-bit.7z.exe">Git for Windows/x64 Portable</a>.</strong>
-  </p>
-  <p>
-    <strong><a href="https://github.com/git-for-windows/git/releases/download/v2.53.0.windows.1/PortableGit-2.53.0-arm64.7z.exe">Git for Windows/ARM64 Portable</a>.</strong>
-  </p>
-  <h4>Using winget tool</h4>
-  <p>
-    Install <a href="https://docs.microsoft.com/en-us/windows/package-manager/winget">winget tool</a> if you don't already have it, then type this command in command prompt or Powershell.<br>
-    <code>winget install --id Git.Git -e --source winget</code>
-  </p>
-  <p class="small">
-    The current source code release is version <strong>2.53.0</strong>.
-    If you want the newer version, you can build it from <a href="https://github.com/git-for-windows/git">the source code</a>.
-  </p>
+    <!-- Projects Tab -->
+    <div id="projects-tab" class="tab-panel active">
+      <div id="content-area">
+        <div id="grid-wrap">
+          <div id="project-container" class="project-grid"></div>
+          <div id="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+            <p>No projects yet.<br>Click <strong>Add Folder</strong> or drag a folder here to get started.</p>
+          </div>
+        </div>
 
-  <h2>Now What?</h2>
-  <p>
-    Now that you have downloaded Git, it's time to start using it.
-  </p>
-  <ul id="download-next-steps">
-    <li>
-      <a href="/book">
-      <img src="/images/icons/nav-read-book.png" />
-      <h3>Read the Book</h3>
-      <p>Dive into the Pro Git book and learn at your own pace.</p>
-      </a>
-    </li>
-    <li>
-      <a href="/downloads/guis">
-      <img src="/images/icons/nav-download-gui.png" />
-      <h3>Download a GUI</h3>
-      <p>Several free and commercial GUI tools are available for the Windows platform.</p>
-      </a>
-    </li>
-    <li>
-      <a href="/community">
-      <img src="/images/icons/nav-get-involved.png" />
-      <h3>Get Involved</h3>
-      <p>A knowledgeable Git community is available to answer your questions.</p>
-      </a>
-    </li>
-  </ul>
+        <!-- Detail Panel -->
+        <div id="detail-panel">
+          <div id="detail-content">
+            <div class="detail-header">
+              <input id="detail-title" type="text" placeholder="Project title" spellcheck="false">
+              <button class="detail-close" onclick="closeDetail()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
 
-    </div>
-  </div>
-</div>
+            <div class="detail-field">
+              <label>Type</label>
+              <select id="detail-type" onchange="updateDetailField('type',this.value)">
+                <option value="AE">After Effects</option>
+                <option value="Coding">Coding</option>
+                <option value="Video">Video</option>
+                <option value="3D">3D</option>
+                <option value="Design">Design</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
 
-          
+            <div class="detail-field">
+              <label>Status</label>
+              <select id="detail-status" onchange="updateDetailField('status',this.value)">
+                <option value="Idea">Idea</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Done">Done</option>
+                <option value="Archived">Archived</option>
+              </select>
+            </div>
+
+            <div class="detail-field">
+              <label>Tags</label>
+              <div class="tags-input-wrap" id="tags-wrap" onclick="document.getElementById('tag-input').focus()">
+                <input id="tag-input" type="text" placeholder="Add tag...">
+              </div>
+            </div>
+
+            <div class="detail-field">
+              <label>Notes</label>
+              <textarea id="detail-notes" placeholder="Notes..." rows="5"></textarea>
+            </div>
+
+            <div class="detail-info" id="detail-info"></div>
+
+            <div class="detail-actions" id="detail-actions">
+              <button class="btn" onclick="openFolder()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                Open Folder
+              </button>
+              <button class="btn" onclick="openProject()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                Open Project
+              </button>
+              <button class="btn open-in-modal-btn" onclick="openOpenInModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 3h7v7"/><path d="M10 14L21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
+                Open In
+              </button>
+              <button class="btn" onclick="copyPath()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                Copy Path
+              </button>
+              <button class="btn" style="color:#ef4444;border-color:rgba(239,68,68,.3)" onclick="deleteProject()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-      
-      <footer>
-  <div class="site-source">
-    <a href="/site">About this site</a><br>
-    Patches, suggestions, and comments are welcome.
-  </div>
-  <div class="sfc-member">
-    Git is a member of <a href="/sfc">Software Freedom Conservancy</a>
-  </div>
-</footer>
-
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://code.jquery.com/ui/1.14.1/jquery-ui.min.js"></script>
-<script src="/js/jquery.defaultvalue.js"></script>
-<script src="/js/session.min.js"></script>
-
-<script src="/js/application.min.a3d5f3804b4de47a8d04e51a64c17afb8a14b38ec4aa7caa5bb6d6e4f5cb89ef.js" integrity="sha256-o9XzgEtN5HqNBOUaZMF6&#43;4oUs47EqnyqW7bW5PXLie8="></script>
-
     </div>
-  
 
+    <!-- Ideas Tab -->
+    <div id="ideas-tab" class="tab-panel">
+      <div id="ideas-layout">
+        <section class="idea-panel">
+          <div class="ideas-list-head">
+            <h2 class="ideas-list-title">Project Ideas</h2>
+            <button class="btn" onclick="startNewIdea()">New</button>
+          </div>
+          <input id="idea-search-input" type="text" placeholder="Search ideas..." autocomplete="off" spellcheck="false">
+          <div id="idea-list"></div>
+          <div id="idea-empty" class="idea-empty">No ideas yet. Create your first project note.</div>
+        </section>
+        <section class="idea-panel">
+          <div class="idea-editor-head">
+            <h2 class="idea-editor-title" id="idea-editor-title">New Idea</h2>
+            <p class="idea-editor-sub" id="idea-editor-subtitle">Store rough concepts, references and next steps.</p>
+          </div>
+          <div class="idea-form">
+            <div class="idea-field">
+              <label for="idea-title-input">Title</label>
+              <input id="idea-title-input" type="text" placeholder="Idea title" spellcheck="false">
+            </div>
+            <div class="idea-field">
+              <label for="idea-tags-input">Tags</label>
+              <input id="idea-tags-input" type="text" placeholder="branding, automation, social media">
+            </div>
+            <div class="idea-field" style="flex:1;min-height:0">
+              <label for="idea-content-input">Notes</label>
+              <textarea id="idea-content-input" placeholder="Describe the idea, constraints, tools, and next steps..."></textarea>
+            </div>
+          </div>
+          <div class="idea-actions">
+            <button class="btn btn-primary" id="idea-save-btn" onclick="saveIdea()">Save Idea</button>
+            <button class="btn" onclick="startNewIdea()">Reset</button>
+            <button class="btn" id="idea-delete-btn" style="display:none;color:#ef4444;border-color:rgba(239,68,68,.3)" onclick="deleteCurrentIdea()">Delete</button>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div id="settings-tab" class="tab-panel">
+      <div id="settings-wrap">
+        <section class="settings-card">
+          <h2 class="settings-title">Appearance</h2>
+          <p class="settings-subtitle">Choose a visual style for the launcher.</p>
+          <div class="theme-grid">
+            <button class="theme-card" data-theme-option="dark" onclick="setTheme('dark')">
+              <span class="theme-preview theme-preview-dark"></span>
+              <span class="theme-name">Dark</span>
+              <span class="theme-desc">High contrast and neutral colors.</span>
+            </button>
+            <button class="theme-card" data-theme-option="light" onclick="setTheme('light')">
+              <span class="theme-preview theme-preview-light"></span>
+              <span class="theme-name">Light</span>
+              <span class="theme-desc">Bright workspace with subtle accents.</span>
+            </button>
+            <button class="theme-card" data-theme-option="purple" onclick="setTheme('purple')">
+              <span class="theme-preview theme-preview-purple"></span>
+              <span class="theme-name">Purple</span>
+              <span class="theme-desc">Creative look with low-light contrast.</span>
+            </button>
+          </div>
+        </section>
+        <section class="settings-card">
+          <h2 class="settings-title">Backup Sync</h2>
+          <p class="settings-subtitle">At every app start, all projects are mirrored to this backup folder.</p>
+          <div class="settings-list" style="margin-bottom:12px">
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <span class="settings-row-title">Run Backup On Startup</span>
+                <span class="settings-row-desc">Automatically sync projects when the app starts.</span>
+              </div>
+              <button class="switch active" id="setting-auto-backup-toggle" onclick="toggleSettingSwitch('autoBackupOnStartup')"></button>
+            </div>
+          </div>
+          <div class="backup-row">
+            <input id="backup-folder-input" type="text" readonly placeholder="No backup folder selected">
+            <button class="btn" onclick="chooseBackupFolder()">Choose Folder</button>
+            <button class="btn" onclick="clearBackupFolder()">Clear</button>
+          </div>
+          <div class="settings-actions">
+            <button class="btn" onclick="runBackupSyncNow()">Run Sync Now</button>
+          </div>
+          <div id="backup-sync-state">Backup disabled. Choose a folder to enable sync.</div>
+        </section>
+        <section class="settings-card">
+          <h2 class="settings-title">Project Defaults</h2>
+          <p class="settings-subtitle">Define how new projects are created and how destructive actions behave.</p>
+          <div class="settings-list">
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <span class="settings-row-title">Default Status For New Projects</span>
+                <span class="settings-row-desc">Used when adding a folder as a new project.</span>
+              </div>
+              <select class="settings-select" id="setting-default-status" onchange="setDefaultProjectStatus(this.value)">
+                <option value="Idea">Idea</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Done">Done</option>
+                <option value="Archived">Archived</option>
+              </select>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <span class="settings-row-title">Confirm Before Delete</span>
+                <span class="settings-row-desc">Show a confirmation dialog when deleting projects or ideas.</span>
+              </div>
+              <button class="switch active" id="setting-confirm-delete-toggle" onclick="toggleSettingSwitch('confirmDelete')"></button>
+            </div>
+          </div>
+        </section>
+        <section class="settings-card">
+          <h2 class="settings-title">Performance & Motion</h2>
+          <p class="settings-subtitle">Tune visuals for your device or reduce visual noise.</p>
+          <div class="settings-list">
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <span class="settings-row-title">3D Background</span>
+                <span class="settings-row-desc">Enable ambient particle background in the workspace.</span>
+              </div>
+              <button class="switch active" id="setting-background-toggle" onclick="toggleSettingSwitch('backgroundEnabled')"></button>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <span class="settings-row-title">UI Animations</span>
+                <span class="settings-row-desc">Enable transitions for cards, panels and notifications.</span>
+              </div>
+              <button class="switch active" id="setting-animations-toggle" onclick="toggleSettingSwitch('animationsEnabled')"></button>
+            </div>
+          </div>
+        </section>
+        <section class="settings-card">
+          <h2 class="settings-title">Project Visibility</h2>
+          <p class="settings-subtitle">Reset search and filters if projects are hidden.</p>
+          <button class="btn" onclick="clearFiltersAndSearch(true)">Reset Filters & Search</button>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toasts -->
+<div id="toast-container"></div>
+
+<!-- Spotlight -->
+<div id="spotlight-overlay" onclick="if(event.target===this)closeSpotlight()">
+  <div id="spotlight-box">
+    <div id="spotlight-input-wrap">
+      <svg id="spotlight-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input id="spotlight-input" type="text" placeholder="Search projects..." autocomplete="off" spellcheck="false">
+    </div>
+    <div id="spotlight-results"></div>
+  </div>
+</div>
+
+<!-- Drop Overlay -->
+<div id="drop-overlay">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  <p>Drop folder to add project</p>
+</div>
+
+<div id="confirm-overlay" onclick="if(event.target===this)closeConfirmDialog(false)">
+  <div id="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <h3 id="confirm-title" class="confirm-title">Confirm Action</h3>
+    <p id="confirm-message" class="confirm-message">Are you sure?</p>
+    <div class="confirm-actions">
+      <button class="btn" id="confirm-cancel-btn" onclick="closeConfirmDialog(false)">Cancel</button>
+      <button class="btn btn-danger" id="confirm-ok-btn" onclick="closeConfirmDialog(true)">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="open-in-overlay" onclick="if(event.target===this)closeOpenInModal(false)">
+  <div id="open-in-dialog" role="dialog" aria-modal="true" aria-labelledby="open-in-title">
+    <div class="open-in-head">
+      <div class="open-in-title-wrap">
+        <h3 id="open-in-title" class="open-in-title">Open Project In...</h3>
+        <p id="open-in-subtitle" class="open-in-sub">Choose an app for this project.</p>
+      </div>
+      <button class="open-in-close" onclick="closeOpenInModal(false)" aria-label="Close Open In dialog">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="open-in-body">
+      <div id="open-in-grid"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   State
+   ═══════════════════════════════════════════════════════════════════ */
+let bridge = null;
+let allProjects = [];
+let allIdeas = [];
+let currentFilter = { type: '', status: '' };
+let searchQuery = '';
+let ideaSearchQuery = '';
+let selectedProjectId = null;
+let editingIdeaId = null;
+let currentView = 'grid';
+let currentTab = 'projects';
+let settings = {};
+let bridgeReady = false;
+let startupLoaderVisible = true;
+let startupLogLines = [];
+let latestBackupSummary = null;
+let windowIsMaximized = false;
+let backgroundEnabled = true;
+let animationsEnabled = true;
+let confirmResolver = null;
+let openInTargets = [];
+let openInOpen = false;
+let launcherUpdateCheckDone = false;
+
+const SETTINGS_DEFAULTS = {
+  theme: 'dark',
+  view: 'grid',
+  filterType: '',
+  filterStatus: '',
+  tab: 'projects',
+  backupRoot: '',
+  backupLastRun: '',
+  sortBy: 'updated_at',
+  autoBackupOnStartup: true,
+  confirmDelete: true,
+  backgroundEnabled: true,
+  animationsEnabled: true,
+  defaultProjectStatus: 'Idea',
+  launcherUpdateIgnoredSha: '',
+  launcherUpdateLastCheck: '',
+  launcherUpdateLastAvailableSha: '',
+  launcherUpdateLastInstalledSha: '',
+  launcherUpdateLastInstalledAt: '',
+};
+
+const OPEN_IN_ICON_URLS = {
+  vscode: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/vscode/vscode-original.svg',
+  after_effects: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/aftereffects/aftereffects-original.svg',
+  notepad: 'https://img.icons8.com/color/96/notepad--v1.png',
+};
+
+function setWindowMaxState(isMaximized) {
+  windowIsMaximized = Boolean(isMaximized);
+  const maxBtn = document.getElementById('win-max-btn');
+  if (maxBtn) maxBtn.classList.toggle('is-max', windowIsMaximized);
+}
+
+function windowMinimize() {
+  if (bridge && typeof bridge.minimizeWindow === 'function') {
+    bridge.minimizeWindow();
+  }
+}
+
+function windowToggleMaximize() {
+  if (bridge && typeof bridge.toggleMaximizeWindow === 'function') {
+    bridge.toggleMaximizeWindow();
+  }
+}
+
+function windowClose() {
+  if (bridge && typeof bridge.closeWindow === 'function') {
+    bridge.closeWindow();
+  }
+}
+
+function setLoaderStatus(message, current = 0, total = 0, appendLog = true) {
+  const statusEl = document.getElementById('loader-status-text');
+  const progressEl = document.getElementById('loader-progress-bar');
+  const logEl = document.getElementById('loader-log');
+  if (statusEl) statusEl.textContent = message || 'Working...';
+
+  if (progressEl) {
+    if (total > 0) {
+      const pct = Math.max(0, Math.min(100, Math.round((current / total) * 100)));
+      progressEl.style.width = `${pct}%`;
+    } else {
+      progressEl.style.width = '12%';
+    }
+  }
+
+  if (appendLog && logEl && message) {
+    startupLogLines.push(message);
+    if (startupLogLines.length > 8) startupLogLines = startupLogLines.slice(-8);
+    logEl.innerHTML = startupLogLines.map(line => `<div>${escHtml(line)}</div>`).join('');
+  }
+}
+
+function showStartupLoader(titleText = 'Preparing Project Organizer') {
+  const overlay = document.getElementById('startup-loader');
+  const title = overlay ? overlay.querySelector('.loader-title') : null;
+  const logEl = document.getElementById('loader-log');
+  const progressEl = document.getElementById('loader-progress-bar');
+  if (title) title.textContent = titleText;
+  startupLogLines = [];
+  if (logEl) logEl.innerHTML = '';
+  if (progressEl) progressEl.style.width = '0%';
+  if (overlay) {
+    overlay.classList.remove('hidden');
+    overlay.style.display = 'flex';
+  }
+  startupLoaderVisible = true;
+}
+
+function hideStartupLoader() {
+  const overlay = document.getElementById('startup-loader');
+  if (!overlay) return;
+  startupLoaderVisible = false;
+  if (!animationsEnabled) {
+    overlay.classList.add('hidden');
+    overlay.style.display = 'none';
+    overlay.style.opacity = '1';
+    return;
+  }
+  gsap.to(overlay, {
+    opacity: 0,
+    duration: 0.35,
+    onComplete: () => {
+      overlay.classList.add('hidden');
+      overlay.style.display = 'none';
+      overlay.style.opacity = '1';
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Three.js – Ambient Particles
+   ═══════════════════════════════════════════════════════════════════ */
+const threeState = { running: false, scene: null, camera: null, renderer: null, particles: null, clock: null, animating: false };
+
+function positionThreeCanvas() {
+  const canvas = document.getElementById('three-canvas');
+  const main = document.getElementById('main');
+  const topbar = document.getElementById('topbar');
+  if (!canvas || !main || !topbar) return;
+
+  const mainRect = main.getBoundingClientRect();
+  const topbarRect = topbar.getBoundingClientRect();
+  const left = Math.max(0, Math.round(mainRect.left));
+  const top = Math.max(0, Math.round(topbarRect.bottom));
+  const width = Math.max(1, Math.round(mainRect.width));
+  const height = Math.max(1, Math.round(window.innerHeight - top));
+
+  canvas.style.left = `${left}px`;
+  canvas.style.top = `${top}px`;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+}
+
+function getThreeViewport() {
+  const canvas = document.getElementById('three-canvas');
+  return {
+    width: Math.max(1, Math.floor(canvas?.clientWidth || 1)),
+    height: Math.max(1, Math.floor(canvas?.clientHeight || 1)),
+  };
+}
+
+function resizeThreeRenderer(force = false) {
+  positionThreeCanvas();
+  if (!threeState.renderer || !threeState.camera) return;
+
+  const { width, height } = getThreeViewport();
+  const canvas = threeState.renderer.domElement;
+  if (force || canvas.width !== width || canvas.height !== height) {
+    threeState.renderer.setSize(width, height, false);
+    threeState.camera.aspect = width / height;
+    threeState.camera.updateProjectionMatrix();
+  }
+}
+
+function initThree() {
+  const canvas = document.getElementById('three-canvas');
+  if (!canvas) return;
+  if (threeState.scene && threeState.renderer && threeState.camera) {
+    canvas.style.display = 'block';
+    threeState.running = true;
+    resizeThreeRenderer(true);
+    animateThree();
+    return;
+  }
+  canvas.style.display = 'block';
+  positionThreeCanvas();
+  const { width: w, height: h } = getThreeViewport();
+
+  threeState.scene = new THREE.Scene();
+  threeState.camera = new THREE.PerspectiveCamera(54, w / h, 0.1, 100);
+  threeState.camera.position.set(0, 0, 34);
+
+  threeState.renderer = new THREE.WebGLRenderer({
+    canvas,
+    alpha: true,
+    antialias: true,
+    powerPreference: 'low-power',
+  });
+  // Qt WebEngine + fractional DPR can offset WebGL. Keep pixel ratio stable.
+  threeState.renderer.setPixelRatio(1);
+  threeState.renderer.setSize(w, h, false);
+  threeState.renderer.setClearColor(0x000000, 0);
+
+  // Particles
+  const count = 300;
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(count * 3);
+  const vel = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    pos[i * 3] = (Math.random() - 0.5) * 56;
+    pos[i * 3 + 1] = (Math.random() - 0.5) * 34;
+    pos[i * 3 + 2] = (Math.random() - 0.5) * 28;
+    vel[i * 3] = (Math.random() - 0.5) * 0.005;
+    vel[i * 3 + 1] = (Math.random() - 0.5) * 0.005;
+    vel[i * 3 + 2] = (Math.random() - 0.5) * 0.002;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  threeState._vel = vel;
+
+  const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--three-color').trim();
+  const mat = new THREE.PointsMaterial({
+    color: new THREE.Color(accentColor),
+    size: 0.12,
+    transparent: true,
+    opacity: 0.35,
+    sizeAttenuation: true,
+  });
+  threeState.particles = new THREE.Points(geo, mat);
+  threeState.scene.add(threeState.particles);
+
+  threeState.clock = new THREE.Clock();
+  threeState.running = true;
+
+  // Subtle wireframe orb
+  const orbGeo = new THREE.IcosahedronGeometry(4.8, 2);
+  const orbMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(accentColor),
+    wireframe: true,
+    transparent: true,
+    opacity: 0.04,
+  });
+  threeState.orb = new THREE.Mesh(orbGeo, orbMat);
+  threeState.scene.add(threeState.orb);
+
+  resizeThreeRenderer(true);
+  animateThree();
+}
+
+function animateThree() {
+  if (!threeState.running || threeState.animating) return;
+  threeState.animating = true;
+  const tick = () => {
+    if (!threeState.running) {
+      threeState.animating = false;
+      return;
+    }
+    requestAnimationFrame(tick);
+    resizeThreeRenderer();
+
+    const dt = threeState.clock.getDelta();
+    const pos = threeState.particles.geometry.attributes.position.array;
+    const vel = threeState._vel;
+
+    for (let i = 0; i < pos.length; i++) {
+      pos[i] += vel[i] * 60 * dt;
+    }
+    threeState.particles.geometry.attributes.position.needsUpdate = true;
+    threeState.particles.rotation.y += 0.0003;
+    if (threeState.orb) {
+      threeState.orb.rotation.x += 0.0005;
+      threeState.orb.rotation.y += 0.0008;
+    }
+    threeState.renderer.render(threeState.scene, threeState.camera);
+  };
+  tick();
+}
+
+function updateThreeColors() {
+  if (!threeState.particles) return;
+  const style = getComputedStyle(document.documentElement);
+  const c = style.getPropertyValue('--three-color').trim();
+  threeState.particles.material.color.set(c);
+  if (threeState.orb) threeState.orb.material.color.set(c);
+}
+
+// Visibility
+document.addEventListener('visibilitychange', () => {
+  if (!threeState.clock) return;
+  if (document.hidden) {
+    threeState.running = false;
+  } else {
+    if (!backgroundEnabled) return;
+    threeState.running = true;
+    threeState.clock.getDelta(); // reset delta
+    animateThree();
+  }
+});
+
+window.addEventListener('resize', () => resizeThreeRenderer(true));
+
+const windowTitlebar = document.getElementById('window-titlebar');
+if (windowTitlebar) {
+  windowTitlebar.addEventListener('mousedown', (event) => {
+    if (event.button !== 0) return;
+    if (event.target && event.target.closest('.window-btn')) return;
+    if (bridge && typeof bridge.beginWindowDrag === 'function') {
+      bridge.beginWindowDrag();
+    }
+  });
+  windowTitlebar.addEventListener('dblclick', (event) => {
+    if (event.target && event.target.closest('.window-btn')) return;
+    windowToggleMaximize();
+  });
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   Bridge Init
+   ═══════════════════════════════════════════════════════════════════ */
+function initBridge() {
+  return new Promise((resolve) => {
+    if (typeof qt !== 'undefined' && qt.webChannelTransport) {
+      new QWebChannel(qt.webChannelTransport, (channel) => {
+        bridge = channel.objects.bridge;
+        // Connect signals
+        bridge.errorOccurred.connect((msg) => showToast(msg, true));
+        if (bridge.windowMaximizedChanged && bridge.windowMaximizedChanged.connect) {
+          bridge.windowMaximizedChanged.connect((isMaximized) => {
+            setWindowMaxState(Boolean(isMaximized));
+          });
+        }
+        if (bridge.backupSyncProgress && bridge.backupSyncProgress.connect) {
+          bridge.backupSyncProgress.connect((msg, current, total) => {
+            setLoaderStatus(msg, current, total, true);
+            if (!startupLoaderVisible) {
+              const state = document.getElementById('backup-sync-state');
+              if (state) state.textContent = msg;
+            }
+          });
+        }
+        bridge.projectAdded.connect((json) => {
+          try {
+            const p = parseJsonPayload(json, null);
+            if (!p) return;
+            allProjects = allProjects.filter(existing => existing.id !== p.id);
+            allProjects.unshift(p);
+            ensureProjectVisible(p);
+            renderProjects();
+            selectProject(p.id);
+            showToast(`Added: ${p.title}`);
+          } catch(e) {}
+        });
+        if (bridge.projectUpdated && bridge.projectUpdated.connect) {
+          bridge.projectUpdated.connect((json) => {
+            try {
+              const p = parseJsonPayload(json, null);
+              if (!p) return;
+              allProjects = allProjects.filter(existing => existing.id !== p.id);
+              allProjects.unshift(p);
+              renderProjects(false);
+              if (selectedProjectId === p.id) selectProject(p.id);
+            } catch (e) {}
+          });
+        }
+        bridge.projectDeleted.connect((id) => {
+          allProjects = allProjects.filter(p => p.id !== id);
+          if (selectedProjectId === id) closeDetail();
+          renderProjects();
+        });
+        if (bridge.ideaAdded && bridge.ideaAdded.connect) {
+          bridge.ideaAdded.connect((json) => {
+            try {
+              const idea = parseJsonPayload(json, null);
+              if (!idea) return;
+              upsertIdea(idea);
+              renderIdeas();
+              if (currentTab === 'ideas') editIdea(idea.id);
+            } catch (e) {}
+          });
+        }
+        if (bridge.ideaUpdated && bridge.ideaUpdated.connect) {
+          bridge.ideaUpdated.connect((json) => {
+            try {
+              const idea = parseJsonPayload(json, null);
+              if (!idea) return;
+              upsertIdea(idea);
+              renderIdeas(false);
+              if (editingIdeaId === idea.id) {
+                fillIdeaForm(idea);
+              }
+            } catch (e) {}
+          });
+        }
+        if (bridge.ideaDeleted && bridge.ideaDeleted.connect) {
+          bridge.ideaDeleted.connect((ideaId) => {
+            allIdeas = allIdeas.filter(i => i.id !== ideaId);
+            if (editingIdeaId === ideaId) startNewIdea(true);
+            renderIdeas(false);
+          });
+        }
+        if (bridge.isWindowMaximized && typeof bridge.isWindowMaximized === 'function') {
+          try {
+            Promise.resolve(callBridge('isWindowMaximized', [], 5000))
+              .then((isMaximized) => setWindowMaxState(Boolean(isMaximized)))
+              .catch(() => {});
+          } catch (e) {}
+        }
+        bridgeReady = true;
+        resolve();
+      });
+    } else {
+      // Fallback for testing in browser
+      console.warn('QWebChannel not available – running in demo mode');
+      bridgeReady = false;
+      resolve();
+    }
+  });
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   Data
+   ═══════════════════════════════════════════════════════════════════ */
+function parseJsonPayload(payload, fallback) {
+  if (payload == null || payload === '') return fallback;
+  if (typeof payload === 'string') return JSON.parse(payload);
+  return payload;
+}
+
+function callBridge(methodName, args = [], timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    if (!bridge || typeof bridge[methodName] !== 'function') {
+      reject(new Error(`Bridge method unavailable: ${methodName}`));
+      return;
+    }
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const fail = (err) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    };
+    try {
+      const result = bridge[methodName](...args, (callbackValue) => finish(callbackValue));
+      if (result !== undefined) {
+        if (result && typeof result.then === 'function') {
+          result.then(finish).catch(fail);
+        } else {
+          finish(result);
+        }
+        return;
+      }
+      setTimeout(() => {
+        if (!settled) finish(undefined);
+      }, timeoutMs);
+    } catch (err) {
+      fail(err);
+    }
+  });
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function normalizeDefaultProjectStatus(status) {
+  const allowed = ['Idea', 'In Progress', 'Done', 'Archived'];
+  return allowed.includes(status) ? status : 'Idea';
+}
+
+function normalizeSettings(raw) {
+  const merged = { ...SETTINGS_DEFAULTS, ...(raw || {}) };
+  merged.theme = ['dark', 'light', 'purple'].includes(merged.theme) ? merged.theme : 'dark';
+  merged.view = merged.view === 'list' ? 'list' : 'grid';
+  merged.tab = ['projects', 'ideas', 'settings'].includes(merged.tab) ? merged.tab : 'projects';
+  merged.backupRoot = typeof merged.backupRoot === 'string' ? merged.backupRoot : '';
+  merged.backupLastRun = typeof merged.backupLastRun === 'string' ? merged.backupLastRun : '';
+  merged.autoBackupOnStartup = merged.autoBackupOnStartup !== false;
+  merged.confirmDelete = merged.confirmDelete !== false;
+  merged.backgroundEnabled = merged.backgroundEnabled !== false;
+  merged.animationsEnabled = merged.animationsEnabled !== false;
+  merged.defaultProjectStatus = normalizeDefaultProjectStatus(merged.defaultProjectStatus);
+  merged.launcherUpdateIgnoredSha = typeof merged.launcherUpdateIgnoredSha === 'string' ? merged.launcherUpdateIgnoredSha : '';
+  merged.launcherUpdateLastCheck = typeof merged.launcherUpdateLastCheck === 'string' ? merged.launcherUpdateLastCheck : '';
+  merged.launcherUpdateLastAvailableSha = typeof merged.launcherUpdateLastAvailableSha === 'string' ? merged.launcherUpdateLastAvailableSha : '';
+  merged.launcherUpdateLastInstalledSha = typeof merged.launcherUpdateLastInstalledSha === 'string' ? merged.launcherUpdateLastInstalledSha : '';
+  merged.launcherUpdateLastInstalledAt = typeof merged.launcherUpdateLastInstalledAt === 'string' ? merged.launcherUpdateLastInstalledAt : '';
+  return merged;
+}
+
+function updateSettingSwitchUi(id, enabled) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  btn.classList.toggle('active', Boolean(enabled));
+  btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+}
+
+function syncSettingsControlsFromState() {
+  const statusSelect = document.getElementById('setting-default-status');
+  if (statusSelect) statusSelect.value = normalizeDefaultProjectStatus(settings.defaultProjectStatus);
+  updateSettingSwitchUi('setting-auto-backup-toggle', settings.autoBackupOnStartup !== false);
+  updateSettingSwitchUi('setting-confirm-delete-toggle', settings.confirmDelete !== false);
+  updateSettingSwitchUi('setting-background-toggle', settings.backgroundEnabled !== false);
+  updateSettingSwitchUi('setting-animations-toggle', settings.animationsEnabled !== false);
+}
+
+function setAnimationsEnabled(enabled, skipSave = false) {
+  animationsEnabled = Boolean(enabled);
+  document.documentElement.classList.toggle('reduced-motion', !animationsEnabled);
+  settings.animationsEnabled = animationsEnabled;
+  syncSettingsControlsFromState();
+  if (!skipSave) saveCurrentSettings();
+}
+
+function setBackgroundEnabled(enabled, skipSave = false) {
+  backgroundEnabled = Boolean(enabled);
+  settings.backgroundEnabled = backgroundEnabled;
+  const canvas = document.getElementById('three-canvas');
+  if (canvas) canvas.style.display = backgroundEnabled ? 'block' : 'none';
+  if (backgroundEnabled) {
+    if (!threeState.scene) {
+      initThree();
+    } else if (!threeState.running) {
+      threeState.running = true;
+      if (threeState.clock) threeState.clock.getDelta();
+      animateThree();
+    }
+    resizeThreeRenderer(true);
+  } else {
+    threeState.running = false;
+  }
+  syncSettingsControlsFromState();
+  if (!skipSave) saveCurrentSettings();
+}
+
+function setDefaultProjectStatus(status, skipSave = false) {
+  settings.defaultProjectStatus = normalizeDefaultProjectStatus(status);
+  syncSettingsControlsFromState();
+  if (!skipSave) saveCurrentSettings();
+}
+
+function toggleSettingSwitch(key) {
+  if (!settings || typeof settings !== 'object') settings = { ...SETTINGS_DEFAULTS };
+  if (key === 'autoBackupOnStartup') {
+    settings.autoBackupOnStartup = !(settings.autoBackupOnStartup !== false);
+    updateBackupSettingsUi();
+  } else if (key === 'confirmDelete') {
+    settings.confirmDelete = !(settings.confirmDelete !== false);
+  } else if (key === 'backgroundEnabled') {
+    setBackgroundEnabled(!(settings.backgroundEnabled !== false));
+    return;
+  } else if (key === 'animationsEnabled') {
+    setAnimationsEnabled(!(settings.animationsEnabled !== false));
+    return;
+  }
+  syncSettingsControlsFromState();
+  saveCurrentSettings();
+}
+
+function clearFiltersAndSearch(showNotice = false) {
+  let changed = false;
+  if (currentFilter.type) {
+    currentFilter.type = '';
+    changed = true;
+  }
+  if (currentFilter.status) {
+    currentFilter.status = '';
+    changed = true;
+  }
+  if (searchQuery) {
+    searchQuery = '';
+    const input = document.getElementById('search-input');
+    if (input) input.value = '';
+    changed = true;
+  }
+  if (changed) {
+    renderProjects(false);
+    saveCurrentSettings();
+    if (showNotice) showToast('Filters and search reset');
+  }
+  return changed;
+}
+
+function autoFixHiddenProjectsOnStartup() {
+  const hasProjects = allProjects.length > 0;
+  const hasActiveFilters = Boolean(currentFilter.type || currentFilter.status || searchQuery);
+  if (!hasProjects || !hasActiveFilters) return false;
+  if (getFilteredProjects().length > 0) return false;
+  clearFiltersAndSearch(false);
+  showToast('Filters were reset so your projects are visible');
+  return true;
+}
+
+function ensureProjectVisible(project) {
+  const q = searchQuery.toLowerCase();
+  const hiddenByType = currentFilter.type && currentFilter.type !== project.type;
+  const hiddenByStatus = currentFilter.status && currentFilter.status !== project.status;
+  const hiddenBySearch = searchQuery && !(
+    (project.title || '').toLowerCase().includes(q) ||
+    (project.tags || '').toLowerCase().includes(q) ||
+    (project.notes || '').toLowerCase().includes(q) ||
+    (project.root_path || '').toLowerCase().includes(q) ||
+    (project.type || '').toLowerCase().includes(q)
+  );
+  if (hiddenByType || hiddenByStatus || hiddenBySearch) {
+    clearFiltersAndSearch();
+    showToast('Filters were reset so the new project is visible');
+  }
+}
+
+async function loadProjects() {
+  if (!bridge) return;
+  try {
+    const payload = await callBridge('listProjects', [], 15000);
+    const parsed = parseJsonPayload(payload, []);
+    allProjects = Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    showToast('Failed to load projects', true);
+  }
+}
+
+async function loadIdeas() {
+  if (!bridge) return;
+  try {
+    const payload = await callBridge('listIdeas', [], 15000);
+    const parsed = parseJsonPayload(payload, []);
+    allIdeas = Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    showToast('Failed to load ideas', true);
+  }
+}
+
+async function loadSettings() {
+  if (!bridge) return;
+  try {
+    const payload = await callBridge('loadSettingsSlot', [], 15000);
+    settings = normalizeSettings(parseJsonPayload(payload, {}) || {});
+    if (settings.backupLastSummary && typeof settings.backupLastSummary === 'object') {
+      latestBackupSummary = settings.backupLastSummary;
+    }
+    setTheme(settings.theme || 'dark', true);
+    currentView = settings.view;
+    if (settings.filterType) currentFilter.type = settings.filterType;
+    if (settings.filterStatus) currentFilter.status = settings.filterStatus;
+    currentTab = settings.tab;
+    setAnimationsEnabled(settings.animationsEnabled !== false, true);
+    setBackgroundEnabled(settings.backgroundEnabled !== false, true);
+    setDefaultProjectStatus(settings.defaultProjectStatus, true);
+    syncSettingsControlsFromState();
+    updateBackupSettingsUi();
+  } catch(e) {}
+}
+
+function saveCurrentSettings() {
+  if (!bridge) return;
+  settings = normalizeSettings(settings);
+  settings.theme = document.documentElement.getAttribute('data-theme') || 'dark';
+  settings.view = currentView;
+  settings.filterType = currentFilter.type;
+  settings.filterStatus = currentFilter.status;
+  settings.tab = currentTab;
+  settings.backupRoot = settings.backupRoot || '';
+  settings.backupLastRun = settings.backupLastRun || '';
+  settings.autoBackupOnStartup = settings.autoBackupOnStartup !== false;
+  settings.confirmDelete = settings.confirmDelete !== false;
+  settings.backgroundEnabled = settings.backgroundEnabled !== false;
+  settings.animationsEnabled = settings.animationsEnabled !== false;
+  settings.defaultProjectStatus = normalizeDefaultProjectStatus(settings.defaultProjectStatus);
+  settings.launcherUpdateIgnoredSha = typeof settings.launcherUpdateIgnoredSha === 'string' ? settings.launcherUpdateIgnoredSha : '';
+  settings.launcherUpdateLastCheck = typeof settings.launcherUpdateLastCheck === 'string' ? settings.launcherUpdateLastCheck : '';
+  settings.launcherUpdateLastAvailableSha = typeof settings.launcherUpdateLastAvailableSha === 'string' ? settings.launcherUpdateLastAvailableSha : '';
+  settings.launcherUpdateLastInstalledSha = typeof settings.launcherUpdateLastInstalledSha === 'string' ? settings.launcherUpdateLastInstalledSha : '';
+  settings.launcherUpdateLastInstalledAt = typeof settings.launcherUpdateLastInstalledAt === 'string' ? settings.launcherUpdateLastInstalledAt : '';
+  bridge.saveSettingsSlot(JSON.stringify(settings));
+}
+
+function formatDateTime(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString('de-DE');
+  } catch (e) {
+    return iso;
+  }
+}
+
+function updateBackupSettingsUi() {
+  const input = document.getElementById('backup-folder-input');
+  const state = document.getElementById('backup-sync-state');
+  if (!input || !state) return;
+
+  const backupRoot = (settings.backupRoot || '').trim();
+  const autoBackup = settings.autoBackupOnStartup !== false;
+  input.value = backupRoot;
+
+  if (!backupRoot) {
+    state.textContent = 'Backup disabled. Choose a folder to enable sync.';
+    return;
+  }
+
+  if (!autoBackup) {
+    const stamp = settings.backupLastRun ? ` Last run: ${formatDateTime(settings.backupLastRun)}.` : '';
+    state.textContent = `Backup folder active. Startup sync is disabled.${stamp}`;
+    return;
+  }
+
+  if (latestBackupSummary && latestBackupSummary.message) {
+    const msg = latestBackupSummary.message;
+    const stamp = settings.backupLastRun ? ` Last run: ${formatDateTime(settings.backupLastRun)}.` : '';
+    state.textContent = `${msg}${stamp}`;
+    return;
+  }
+
+  if (settings.backupLastRun) {
+    state.textContent = `Backup folder active. Last sync: ${formatDateTime(settings.backupLastRun)}.`;
+  } else {
+    state.textContent = 'Backup folder active. Sync runs automatically on startup.';
+  }
+}
+
+async function chooseBackupFolder() {
+  if (!bridge) return showToast('Bridge not ready', true);
+  try {
+    const folder = await callBridge('pickBackupFolder', [], 600000);
+    if (!folder) return;
+    settings.backupRoot = String(folder);
+    saveCurrentSettings();
+    updateBackupSettingsUi();
+    showToast('Backup folder updated');
+  } catch (e) {
+    showToast('Backup folder selection failed', true);
+  }
+}
+
+function clearBackupFolder() {
+  settings.backupRoot = '';
+  latestBackupSummary = null;
+  saveCurrentSettings();
+  updateBackupSettingsUi();
+  showToast('Backup disabled');
+}
+
+async function runBackupSync(showLoader = false, maxWaitMs = null) {
+  if (!bridge) return null;
+  if (!settings.backupRoot) {
+    latestBackupSummary = null;
+    setLoaderStatus('Backup skipped: no backup folder selected.', 0, 0, true);
+    updateBackupSettingsUi();
+    return { ok: true, skipped: true, message: 'No backup folder selected.' };
+  }
+  if (showLoader) showStartupLoader('Running Backup Sync');
+  setLoaderStatus('Starting backup sync...', 0, 0, true);
+  try {
+    await callBridge('startBackupSync', [], 30000);
+    const startedAt = Date.now();
+    let summary = null;
+    for (;;) {
+      const statusPayload = await callBridge('backupSyncStatus', [], 30000);
+      const status = parseJsonPayload(statusPayload, {}) || {};
+      if (!status.running) {
+        summary = status.summary || summary || {};
+        break;
+      }
+      if (maxWaitMs && Date.now() - startedAt > maxWaitMs) {
+        const message = 'Backup sync continues in background.';
+        setLoaderStatus(message, 0, 0, true);
+        updateBackupSettingsUi();
+        return { ok: true, skipped: false, background: true, message };
+      }
+      await sleep(250);
+    }
+    latestBackupSummary = summary;
+    settings.backupLastRun = new Date().toISOString();
+    settings.backupLastSummary = summary;
+    saveCurrentSettings();
+    updateBackupSettingsUi();
+    if (!summary.ok) {
+      showToast(summary.message || 'Backup sync failed', true);
+    } else if (!summary.skipped) {
+      showToast(summary.message || 'Backup sync finished');
+    }
+    return summary;
+  } catch (e) {
+    showToast('Backup sync failed', true);
+    return null;
+  } finally {
+    if (showLoader) hideStartupLoader();
+  }
+}
+
+async function runBackupSyncNow() {
+  await runBackupSync(true, null);
+}
+
+async function installLauncherHtmlUpdateNow() {
+  if (!bridge) return false;
+
+  let reloading = false;
+  showStartupLoader('Installing Launcher Update');
+  setLoaderStatus('Downloading latest launcher UI...', 1, 3, true);
+
+  try {
+    const payload = await callBridge('installLauncherHtmlUpdate', [], 60000);
+    const result = parseJsonPayload(payload, {});
+    if (!result || !result.ok) {
+      const msg = (result && result.message) ? String(result.message) : 'Launcher update failed.';
+      setLoaderStatus(msg, 0, 0, true);
+      showToast(msg, true);
+      return false;
+    }
+
+    if (!result.updated) {
+      const msg = (result && result.message) ? String(result.message) : 'Launcher is already up to date.';
+      setLoaderStatus(msg, 3, 3, true);
+      showToast(msg);
+      return true;
+    }
+
+    settings.launcherUpdateIgnoredSha = '';
+    settings.launcherUpdateLastInstalledSha = String(result.remoteSha || '');
+    settings.launcherUpdateLastInstalledAt = new Date().toISOString();
+    settings.launcherUpdateLastAvailableSha = String(result.remoteSha || '');
+    saveCurrentSettings();
+
+    setLoaderStatus('Update installed. Reloading launcher...', 3, 3, true);
+    reloading = true;
+    await sleep(260);
+    window.location.reload();
+    return true;
+  } catch (e) {
+    setLoaderStatus('Launcher update failed.', 0, 0, true);
+    showToast('Launcher update failed', true);
+    return false;
+  } finally {
+    if (!reloading) hideStartupLoader();
+  }
+}
+
+async function checkLauncherHtmlUpdateOnStartup() {
+  if (!bridge || launcherUpdateCheckDone) return;
+  launcherUpdateCheckDone = true;
+
+  let updateInfo = null;
+  try {
+    const payload = await callBridge('checkLauncherHtmlUpdate', [false], 30000);
+    updateInfo = parseJsonPayload(payload, {});
+  } catch (e) {
+    return;
+  }
+
+  if (!updateInfo || !updateInfo.ok) return;
+
+  settings.launcherUpdateLastCheck = String(updateInfo.checkedAt || new Date().toISOString());
+  settings.launcherUpdateLastAvailableSha = updateInfo.updateAvailable ? String(updateInfo.remoteSha || '') : '';
+
+  if (!updateInfo.updateAvailable || updateInfo.ignored) return;
+
+  const parts = ['A newer Launcher.html is available on GitHub.'];
+  if (updateInfo.remoteCommitDate) {
+    parts.push(`Published: ${formatDateTime(updateInfo.remoteCommitDate)}.`);
+  }
+  if (updateInfo.remoteCommitSha) {
+    parts.push(`Commit: ${String(updateInfo.remoteCommitSha).slice(0, 7)}.`);
+  }
+  parts.push('Install now?');
+
+  const installNow = await openConfirmDialog({
+    title: 'Launcher Update Available',
+    message: parts.join(' '),
+    confirmText: 'Install Now',
+    cancelText: 'Later',
+    danger: false,
+  });
+
+  if (!installNow) {
+    const remoteSha = String(updateInfo.remoteSha || '');
+    if (remoteSha) {
+      settings.launcherUpdateIgnoredSha = remoteSha;
+      try {
+        await callBridge('deferLauncherHtmlUpdate', [remoteSha], 10000);
+      } catch (e) {}
+      saveCurrentSettings();
+    }
+    showToast('Launcher update postponed');
+    return;
+  }
+
+  await installLauncherHtmlUpdateNow();
+}
+
+function upsertIdea(idea) {
+  if (!idea || typeof idea.id !== 'number') return;
+  allIdeas = allIdeas.filter(existing => existing.id !== idea.id);
+  allIdeas.unshift(idea);
+}
+
+function fillIdeaForm(idea) {
+  const titleInput = document.getElementById('idea-title-input');
+  const tagsInput = document.getElementById('idea-tags-input');
+  const contentInput = document.getElementById('idea-content-input');
+  if (titleInput) titleInput.value = idea?.title || '';
+  if (tagsInput) tagsInput.value = idea?.tags || '';
+  if (contentInput) contentInput.value = idea?.content || '';
+}
+
+function updateIdeaEditorState() {
+  const isEditing = editingIdeaId != null;
+  const title = document.getElementById('idea-editor-title');
+  const subtitle = document.getElementById('idea-editor-subtitle');
+  const saveBtn = document.getElementById('idea-save-btn');
+  const deleteBtn = document.getElementById('idea-delete-btn');
+  if (title) title.textContent = isEditing ? 'Edit Idea' : 'New Idea';
+  if (subtitle) subtitle.textContent = isEditing
+    ? 'Update details, then save your changes.'
+    : 'Store rough concepts, references and next steps.';
+  if (saveBtn) saveBtn.textContent = isEditing ? 'Save Changes' : 'Save Idea';
+  if (deleteBtn) deleteBtn.style.display = isEditing ? 'inline-flex' : 'none';
+}
+
+function startNewIdea(skipRender = false) {
+  editingIdeaId = null;
+  fillIdeaForm(null);
+  updateIdeaEditorState();
+  if (!skipRender) renderIdeas(false);
+}
+
+function editIdea(ideaId) {
+  const idea = allIdeas.find(i => i.id === ideaId);
+  if (!idea) return;
+  editingIdeaId = ideaId;
+  fillIdeaForm(idea);
+  updateIdeaEditorState();
+  renderIdeas(false);
+}
+
+function getFilteredIdeas() {
+  let list = allIdeas.slice();
+  if (ideaSearchQuery) {
+    const q = ideaSearchQuery.toLowerCase();
+    list = list.filter(idea =>
+      (idea.title || '').toLowerCase().includes(q) ||
+      (idea.content || '').toLowerCase().includes(q) ||
+      (idea.tags || '').toLowerCase().includes(q)
+    );
+  }
+  return list;
+}
+
+function renderIdeaSidebar() {
+  const listEl = document.getElementById('ideas-sidebar-list');
+  const emptyEl = document.getElementById('ideas-sidebar-empty');
+  if (!listEl || !emptyEl) return;
+
+  const ideas = getFilteredIdeas();
+  if (!ideas.length) {
+    listEl.innerHTML = '';
+    emptyEl.style.display = 'block';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  listEl.innerHTML = ideas.map(idea => {
+    const title = idea.title || 'Untitled Idea';
+    const isActive = editingIdeaId === idea.id;
+    return `<button class="idea-sidebar-item ${isActive ? 'active' : ''}" onclick="editIdea(${idea.id})" title="${escHtml(title)}">${escHtml(title)}</button>`;
+  }).join('');
+}
+
+function renderIdeas(animate = true) {
+  const listEl = document.getElementById('idea-list');
+  const emptyEl = document.getElementById('idea-empty');
+  if (!listEl || !emptyEl) return;
+
+  const filtered = getFilteredIdeas();
+  renderIdeaSidebar();
+  updateCounts();
+  if (!filtered.length) {
+    listEl.innerHTML = '';
+    emptyEl.style.display = 'block';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  listEl.innerHTML = filtered.map(idea => {
+    const preview = (idea.content || '').replace(/\s+/g, ' ').trim();
+    const clipped = preview.length > 95 ? `${preview.slice(0, 95)}...` : preview;
+    const isActive = editingIdeaId === idea.id;
+    return `
+      <button class="idea-item ${isActive ? 'active' : ''}" onclick="editIdea(${idea.id})">
+        <div class="idea-item-title">${escHtml(idea.title || 'Untitled Idea')}</div>
+        <div class="idea-item-body">${escHtml(clipped || 'No notes yet.')}</div>
+        <div class="idea-item-meta">${formatDate(idea.updated_at)}</div>
+      </button>
+    `;
+  }).join('');
+
+  if (animate && animationsEnabled) {
+    gsap.fromTo('.idea-item', { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.25, stagger: 0.02, ease: 'power2.out' });
+  }
+}
+
+async function saveIdea() {
+  if (!bridge) return showToast('Bridge not ready', true);
+
+  const titleInput = document.getElementById('idea-title-input');
+  const tagsInput = document.getElementById('idea-tags-input');
+  const contentInput = document.getElementById('idea-content-input');
+  const title = String(titleInput?.value || '').trim() || 'Untitled Idea';
+  const tags = String(tagsInput?.value || '').trim();
+  const content = String(contentInput?.value || '');
+  const payload = JSON.stringify({ title, tags, content });
+
+  try {
+    if (editingIdeaId != null) {
+      const ok = await callBridge('updateIdea', [editingIdeaId, payload], 15000);
+      if (!ok) {
+        showToast('Could not update idea', true);
+        return;
+      }
+      const updated = allIdeas.find(i => i.id === editingIdeaId);
+      if (updated) fillIdeaForm(updated);
+      showToast('Idea updated');
+      return;
+    }
+
+    const createdPayload = await callBridge('addIdea', [payload], 15000);
+    const created = parseJsonPayload(createdPayload, null);
+    if (created && typeof created.id === 'number') {
+      upsertIdea(created);
+      editingIdeaId = created.id;
+      fillIdeaForm(created);
+    }
+    updateIdeaEditorState();
+    renderIdeas(false);
+    showToast('Idea saved');
+  } catch (e) {
+    showToast('Could not save idea', true);
+  }
+}
+
+async function deleteCurrentIdea() {
+  if (editingIdeaId == null || !bridge) return;
+  const idea = allIdeas.find(i => i.id === editingIdeaId);
+  const label = idea?.title || 'this idea';
+  if (settings.confirmDelete !== false) {
+    const ok = await openConfirmDialog({
+      title: 'Delete Idea',
+      message: `Delete "${label}"? This cannot be undone.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      danger: true,
+    });
+    if (!ok) return;
+  }
+  try {
+    const ok = await callBridge('deleteIdea', [editingIdeaId], 15000);
+    if (!ok) {
+      showToast('Could not delete idea', true);
+      return;
+    }
+    allIdeas = allIdeas.filter(i => i.id !== editingIdeaId);
+    startNewIdea(true);
+    renderIdeas(false);
+    showToast('Idea deleted');
+  } catch (e) {
+    showToast('Could not delete idea', true);
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   Render
+   ═══════════════════════════════════════════════════════════════════ */
+function getTypeIcon(type) {
+  const icons = {
+    AE: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>',
+    Coding: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+    Video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>',
+    '3D': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 002 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>',
+    Design: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>',
+    Other: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>',
+  };
+  return icons[type] || icons.Other;
+}
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch(e) { return iso; }
+}
+
+function getFilteredProjects() {
+  let list = allProjects;
+  if (currentFilter.type) list = list.filter(p => p.type === currentFilter.type);
+  if (currentFilter.status) list = list.filter(p => p.status === currentFilter.status);
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    list = list.filter(p =>
+      (p.title || '').toLowerCase().includes(q) ||
+      (p.tags || '').toLowerCase().includes(q) ||
+      (p.notes || '').toLowerCase().includes(q) ||
+      (p.root_path || '').toLowerCase().includes(q) ||
+      (p.type || '').toLowerCase().includes(q)
+    );
+  }
+  return list;
+}
+
+function renderProjects(animate = true) {
+  const container = document.getElementById('project-container');
+  const empty = document.getElementById('empty-state');
+  const filtered = getFilteredProjects();
+
+  container.className = currentView === 'list' ? 'project-list' : 'project-grid';
+
+  if (filtered.length === 0) {
+    container.innerHTML = '';
+    empty.style.display = 'flex';
+    if (animationsEnabled) {
+      gsap.fromTo(empty, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4 });
+    }
+  } else {
+    empty.style.display = 'none';
+    const html = filtered.map(p => {
+      const tags = (p.tags || '').split(',').filter(t => t.trim());
+      const isSelected = p.id === selectedProjectId;
+      const coverUrl = p.cover_image ? projectImageToUrl(p.cover_image) : '';
+      const thumb = coverUrl
+        ? `<img class="card-thumb-image" src="${escHtml(coverUrl)}" alt="${escHtml(p.title || 'Project image')}">`
+        : getTypeIcon(p.type);
+      return `
+        <div class="project-card ${isSelected ? 'selected' : ''}" data-id="${p.id}" onclick="selectProject(${p.id})">
+          <div class="card-thumb">${thumb}</div>
+          <div class="card-body">
+            <div class="card-title" title="${escHtml(p.title)}">${escHtml(p.title)}</div>
+            <div class="card-meta">
+              <span class="badge badge-type">${escHtml(p.type)}</span>
+              <span class="badge badge-status">${escHtml(p.status)}</span>
+            </div>
+            ${tags.length ? `<div class="card-tags">${tags.slice(0, 4).map(t => `<span class="tag">${escHtml(t.trim())}</span>`).join('')}</div>` : ''}
+            <div class="card-date">${formatDate(p.updated_at)}</div>
+          </div>
+          <div class="card-kebab-wrap" data-id="${p.id}" onclick="event.stopPropagation()">
+            <button class="card-kebab-btn" title="Project actions" onclick="toggleCardMenu(${p.id}, event)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+            </button>
+            <div class="card-kebab-menu">
+              <button class="card-kebab-item" onclick="chooseProjectCardImage(${p.id}, event)">Bild auswaehlen</button>
+              ${p.cover_image ? `<button class="card-kebab-item" onclick="clearProjectCardImage(${p.id}, event)">Bild entfernen</button>` : ''}
+              <button class="card-kebab-item danger" ${p.status === 'Archived' ? 'disabled' : ''} onclick="archiveProjectFromCard(${p.id}, event)">${p.status === 'Archived' ? 'Bereits archiviert' : 'Archivieren'}</button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+    container.innerHTML = html;
+
+    if (animate && animationsEnabled) {
+      gsap.fromTo('.project-card', { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.35, stagger: 0.03, ease: 'power2.out' });
+    }
+  }
+
+  updateCounts();
+}
+
+function updateCounts() {
+  const total = allProjects.length;
+  document.getElementById('count-all').textContent = total;
+  ['AE', 'Coding', 'Video', '3D', 'Design', 'Other'].forEach(t => {
+    const el = document.getElementById('count-' + t);
+    if (el) el.textContent = allProjects.filter(p => p.type === t).length;
+  });
+  const ideaNotesCountEl = document.getElementById('count-ideas-notes');
+  if (ideaNotesCountEl) ideaNotesCountEl.textContent = String(allIdeas.length);
+
+  // Highlight active filters
+  document.querySelectorAll('#type-filters .filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filterType === currentFilter.type);
+  });
+  document.querySelectorAll('#status-filters .filter-btn').forEach(btn => {
+    if (btn.id === 'sidebar-ideas-link') {
+      btn.classList.toggle('active', currentTab === 'ideas');
+      return;
+    }
+    btn.classList.toggle('active', btn.dataset.filterStatus === currentFilter.status);
+  });
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   Filters & Search
+   ═══════════════════════════════════════════════════════════════════ */
+function setFilter(key, value) {
+  currentFilter[key] = value;
+  renderProjects();
+  saveCurrentSettings();
+}
+
+function openIdeasFromSidebar() {
+  if (currentTab === 'ideas') return;
+  if (!animationsEnabled) {
+    setMainTab('ideas');
+    return;
+  }
+  const fromTab = currentTab;
+  const fromEl = document.getElementById(`${fromTab}-tab`);
+  if (!fromEl) {
+    setMainTab('ideas');
+    return;
+  }
+
+  gsap.to(fromEl, {
+    opacity: 0,
+    y: 6,
+    duration: 0.16,
+    ease: 'power2.inOut',
+    onComplete: () => {
+      setMainTab('ideas');
+      fromEl.style.opacity = '';
+      fromEl.style.transform = '';
+      const ideasPanel = document.getElementById('ideas-tab');
+      if (ideasPanel) {
+        gsap.fromTo(
+          ideasPanel,
+          { opacity: 0, y: 8 },
+          { opacity: 1, y: 0, duration: 0.24, ease: 'power2.out' }
+        );
+      }
+    }
+  });
+}
+
+function setMainTab(tab, skipSave = false) {
+  const normalized = (tab === 'projects' || tab === 'ideas' || tab === 'settings') ? tab : 'projects';
+  currentTab = normalized;
+  closeOpenInModal(true);
+  closeCardKebabMenus();
+  const main = document.getElementById('main');
+  const sidebarTitle = document.getElementById('sidebar-title');
+  if (main) main.setAttribute('data-tab', normalized);
+  const projectsTab = document.getElementById('projects-tab');
+  const ideasTab = document.getElementById('ideas-tab');
+  const settingsTab = document.getElementById('settings-tab');
+  const ideasSidebar = document.getElementById('ideas-sidebar-section');
+  if (projectsTab) projectsTab.classList.toggle('active', normalized === 'projects');
+  if (ideasTab) ideasTab.classList.toggle('active', normalized === 'ideas');
+  if (settingsTab) settingsTab.classList.toggle('active', normalized === 'settings');
+  document.querySelectorAll('.top-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === normalized);
+  });
+  const searchWrap = document.getElementById('search-wrap');
+  const projectActions = document.getElementById('project-actions');
+  if (searchWrap) searchWrap.style.display = normalized === 'projects' ? '' : 'none';
+  if (projectActions) projectActions.style.display = normalized === 'projects' ? 'flex' : 'none';
+  document.querySelectorAll('#sidebar .project-sidebar-section').forEach(section => {
+    section.style.display = normalized === 'projects' ? 'flex' : 'none';
+  });
+  if (ideasSidebar) ideasSidebar.style.display = normalized === 'ideas' ? 'flex' : 'none';
+  if (sidebarTitle) {
+    if (normalized === 'projects') sidebarTitle.textContent = 'Projects';
+    else if (normalized === 'ideas') sidebarTitle.textContent = 'Ideas';
+    else sidebarTitle.textContent = 'Settings';
+  }
+  if (normalized !== 'projects') {
+    const overlay = document.getElementById('drop-overlay');
+    if (overlay) overlay.classList.remove('active');
+  }
+  if (normalized === 'settings') {
+    updateBackupSettingsUi();
+    syncSettingsControlsFromState();
+  }
+  if (normalized === 'ideas') renderIdeas(false);
+  updateCounts();
+  if (normalized !== 'projects') closeDetail();
+  resizeThreeRenderer(true);
+  if (!skipSave) saveCurrentSettings();
+}
+
+document.getElementById('search-input').addEventListener('input', (e) => {
+  searchQuery = e.target.value;
+  renderProjects(false);
+});
+
+const ideaSearchInput = document.getElementById('idea-search-input');
+if (ideaSearchInput) {
+  ideaSearchInput.addEventListener('input', (e) => {
+    ideaSearchQuery = e.target.value || '';
+    renderIdeas(false);
+  });
+}
+
+const ideaContentInput = document.getElementById('idea-content-input');
+if (ideaContentInput) {
+  ideaContentInput.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      saveIdea();
+    }
+  });
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   Project Actions
+   ═══════════════════════════════════════════════════════════════════ */
+function closeCardKebabMenus() {
+  document.querySelectorAll('.card-kebab-wrap.open').forEach((el) => {
+    el.classList.remove('open');
+  });
+}
+
+function toggleCardMenu(projectId, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const wrap = document.querySelector(`.card-kebab-wrap[data-id="${projectId}"]`);
+  if (!wrap) return;
+  const shouldOpen = !wrap.classList.contains('open');
+  closeCardKebabMenus();
+  if (shouldOpen) wrap.classList.add('open');
+}
+
+function projectImageToUrl(rawPath) {
+  const value = String(rawPath || '').trim();
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value) || /^file:\/\//i.test(value)) return value;
+  const normalized = value.replace(/\\/g, '/');
+  if (/^[a-zA-Z]:\//.test(normalized)) return `file:///${encodeURI(normalized)}`;
+  if (normalized.startsWith('//')) return `file:${encodeURI(normalized)}`;
+  if (normalized.startsWith('/')) return `file://${encodeURI(normalized)}`;
+  return encodeURI(normalized);
+}
+
+async function chooseProjectCardImage(projectId, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  closeCardKebabMenus();
+  if (!bridge) return;
+  const p = allProjects.find(x => x.id === projectId);
+  if (!p) return;
+
+  try {
+    const picked = await callBridge('pickProjectImage', [], 600000);
+    if (!picked) return;
+    const ok = await callBridge('updateProject', [projectId, JSON.stringify({ cover_image: String(picked) })], 15000);
+    if (!ok) {
+      showToast('Bild konnte nicht gespeichert werden', true);
+      return;
+    }
+    p.cover_image = String(picked);
+    p.updated_at = new Date().toISOString();
+    renderProjects(false);
+    if (selectedProjectId === projectId) selectProject(projectId);
+    showToast('Projektbild aktualisiert');
+  } catch (e) {
+    showToast('Bildauswahl fehlgeschlagen', true);
+  }
+}
+
+async function clearProjectCardImage(projectId, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  closeCardKebabMenus();
+  if (!bridge) return;
+  const p = allProjects.find(x => x.id === projectId);
+  if (!p || !p.cover_image) return;
+  try {
+    const ok = await callBridge('updateProject', [projectId, JSON.stringify({ cover_image: '' })], 15000);
+    if (!ok) {
+      showToast('Bild konnte nicht entfernt werden', true);
+      return;
+    }
+    p.cover_image = '';
+    p.updated_at = new Date().toISOString();
+    renderProjects(false);
+    if (selectedProjectId === projectId) selectProject(projectId);
+    showToast('Projektbild entfernt');
+  } catch (e) {
+    showToast('Aktion fehlgeschlagen', true);
+  }
+}
+
+async function archiveProjectFromCard(projectId, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  closeCardKebabMenus();
+  if (!bridge) return;
+  const p = allProjects.find(x => x.id === projectId);
+  if (!p) return;
+  if (p.status === 'Archived') {
+    showToast('Projekt ist bereits archiviert');
+    return;
+  }
+  try {
+    const ok = await callBridge('updateProject', [projectId, JSON.stringify({ status: 'Archived' })], 15000);
+    if (!ok) {
+      showToast('Archivieren fehlgeschlagen', true);
+      return;
+    }
+    p.status = 'Archived';
+    p.updated_at = new Date().toISOString();
+    renderProjects(false);
+    if (selectedProjectId === projectId) {
+      const detailStatus = document.getElementById('detail-status');
+      if (detailStatus) detailStatus.value = 'Archived';
+      selectProject(projectId);
+    }
+    showToast(`Archiviert: ${p.title || 'Projekt'}`);
+  } catch (e) {
+    showToast('Archivieren fehlgeschlagen', true);
+  }
+}
+
+async function pickFolder() {
+  if (!bridge) return showToast('Bridge not ready', true);
+  try {
+    await callBridge('pickFolder', [], 600000);
+  } catch (e) {
+    showToast('Folder picker failed', true);
+  }
+}
+
+function selectProject(id) {
+  selectedProjectId = id;
+  const p = allProjects.find(x => x.id === id);
+  if (!p) return;
+  closeOpenInModal(true);
+  closeCardKebabMenus();
+  openInTargets = [];
+
+  // Highlight card
+  document.querySelectorAll('.project-card').forEach(c => c.classList.toggle('selected', +c.dataset.id === id));
+
+  // Fill detail panel
+  document.getElementById('detail-title').value = p.title || '';
+  document.getElementById('detail-type').value = p.type || 'Other';
+  document.getElementById('detail-status').value = p.status || 'Idea';
+  document.getElementById('detail-notes').value = p.notes || '';
+
+  // Tags
+  renderDetailTags(p.tags || '');
+
+  // Info
+  const info = document.getElementById('detail-info');
+  info.innerHTML = `
+    <div class="info-row"><span class="info-label">Path</span><span class="info-value">${escHtml(p.root_path)}</span></div>
+    <div class="info-row"><span class="info-label">Type</span><span class="info-value">${escHtml(p.type)}</span></div>
+    <div class="info-row"><span class="info-label">Main file</span><span class="info-value">${escHtml(p.main_file || '—')}</span></div>
+    <div class="info-row"><span class="info-label">Created</span><span class="info-value">${formatDate(p.created_at)}</span></div>
+    <div class="info-row"><span class="info-label">Updated</span><span class="info-value">${formatDate(p.updated_at)}</span></div>
+  `;
+
+  // Open panel
+  const panel = document.getElementById('detail-panel');
+  if (!panel.classList.contains('open')) {
+    panel.classList.add('open');
+    if (animationsEnabled) {
+      gsap.fromTo('#detail-content', { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.3, ease: 'power2.out' });
+    }
+  }
+}
+
+function closeDetail() {
+  selectedProjectId = null;
+  closeOpenInModal(true);
+  closeCardKebabMenus();
+  document.querySelectorAll('.project-card').forEach(c => c.classList.remove('selected'));
+  const panel = document.getElementById('detail-panel');
+  if (!panel) return;
+  if (!animationsEnabled) {
+    panel.classList.remove('open');
+    return;
+  }
+  gsap.to('#detail-content', {
+    opacity: 0, x: 20, duration: 0.2, ease: 'power2.in',
+    onComplete: () => { panel.classList.remove('open'); }
+  });
+}
+
+function updateDetailField(field, value) {
+  if (!bridge || !selectedProjectId) return;
+  const obj = {}; obj[field] = value;
+  bridge.updateProject(selectedProjectId, JSON.stringify(obj));
+  const p = allProjects.find(x => x.id === selectedProjectId);
+  if (p) { p[field] = value; renderProjects(false); }
+}
+
+// Title blur save
+document.getElementById('detail-title').addEventListener('change', function() {
+  if (!bridge || !selectedProjectId) return;
+  const val = this.value.trim();
+  if (!val) return;
+  bridge.updateProject(selectedProjectId, JSON.stringify({ title: val }));
+  const p = allProjects.find(x => x.id === selectedProjectId);
+  if (p) { p.title = val; renderProjects(false); }
+});
+
+// Notes blur save
+document.getElementById('detail-notes').addEventListener('change', function() {
+  if (!bridge || !selectedProjectId) return;
+  bridge.updateProject(selectedProjectId, JSON.stringify({ notes: this.value }));
+  const p = allProjects.find(x => x.id === selectedProjectId);
+  if (p) p.notes = this.value;
+});
+
+
+/* ─── Tags ────────────────────────────────────────────────────────── */
+let detailTags = [];
+
+function renderDetailTags(tagsStr) {
+  detailTags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
+  const wrap = document.getElementById('tags-wrap');
+  const input = document.getElementById('tag-input');
+  // Remove old chips
+  wrap.querySelectorAll('.tag-chip').forEach(c => c.remove());
+  detailTags.forEach((t, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'tag-chip';
+    chip.innerHTML = `${escHtml(t)}<button onclick="removeTag(${i})">&times;</button>`;
+    wrap.insertBefore(chip, input);
+  });
+}
+
+function removeTag(index) {
+  detailTags.splice(index, 1);
+  saveTags();
+}
+
+function saveTags() {
+  const tagsStr = detailTags.join(', ');
+  renderDetailTags(tagsStr);
+  if (!bridge || !selectedProjectId) return;
+  bridge.updateProject(selectedProjectId, JSON.stringify({ tags: tagsStr }));
+  const p = allProjects.find(x => x.id === selectedProjectId);
+  if (p) { p.tags = tagsStr; renderProjects(false); }
+}
+
+document.getElementById('tag-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const val = this.value.trim().replace(',', '');
+    if (val && !detailTags.includes(val)) {
+      detailTags.push(val);
+      saveTags();
+    }
+    this.value = '';
+  }
+  if (e.key === 'Backspace' && !this.value && detailTags.length) {
+    detailTags.pop();
+    saveTags();
+  }
+});
+
+
+/* ─── Quick Actions ──────────────────────────────────────────────── */
+function getOpenInIconUrl(appId) {
+  return OPEN_IN_ICON_URLS[String(appId || '')] || '';
+}
+
+function getOpenInFallbackText(label, appId) {
+  const value = String(label || appId || '').trim();
+  if (!value) return 'APP';
+  const pieces = value.split(/\s+/).filter(Boolean);
+  if (pieces.length >= 2) return (pieces[0][0] + pieces[1][0]).toUpperCase();
+  return value.slice(0, 3).toUpperCase();
+}
+
+function closeOpenInModal(result = false) {
+  const overlay = document.getElementById('open-in-overlay');
+  const dialog = document.getElementById('open-in-dialog');
+  if (!overlay || !openInOpen) return;
+
+  const finish = () => {
+    openInOpen = false;
+    overlay.classList.remove('active');
+    if (dialog) {
+      dialog.style.opacity = '';
+      dialog.style.transform = '';
+    }
+  };
+
+  if (!animationsEnabled || !dialog) {
+    finish();
+    return;
+  }
+  gsap.to(dialog, { opacity: 0, y: 10, scale: 0.985, duration: 0.14, ease: 'power2.in', onComplete: finish });
+}
+
+function renderOpenInModalTargets(targets) {
+  const grid = document.getElementById('open-in-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  if (!targets.length) {
+    const empty = document.createElement('div');
+    empty.className = 'open-in-empty';
+    empty.textContent = 'No launcher available for this project type.';
+    grid.appendChild(empty);
+    return;
+  }
+
+  targets.forEach((target) => {
+    const appId = String(target?.id || '').trim();
+    if (!appId) return;
+    const labelText = String(target?.label || appId);
+    const descText = String(target?.description || '');
+    const available = target?.available !== false;
+
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'open-in-card';
+    card.disabled = !available;
+
+    const iconWrap = document.createElement('div');
+    iconWrap.className = 'open-in-icon';
+
+    const iconUrl = getOpenInIconUrl(appId);
+    if (iconUrl) {
+      const iconImg = document.createElement('img');
+      iconImg.src = iconUrl;
+      iconImg.alt = `${labelText} icon`;
+      iconImg.referrerPolicy = 'no-referrer';
+      iconImg.loading = 'lazy';
+      iconImg.onerror = () => {
+        iconImg.remove();
+        const fallback = document.createElement('span');
+        fallback.className = 'open-in-icon-fallback';
+        fallback.textContent = getOpenInFallbackText(labelText, appId);
+        iconWrap.appendChild(fallback);
+      };
+      iconWrap.appendChild(iconImg);
+    } else {
+      const fallback = document.createElement('span');
+      fallback.className = 'open-in-icon-fallback';
+      fallback.textContent = getOpenInFallbackText(labelText, appId);
+      iconWrap.appendChild(fallback);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'open-in-meta';
+
+    const title = document.createElement('div');
+    title.className = 'open-in-card-title';
+    title.textContent = labelText;
+    meta.appendChild(title);
+
+    if (descText) {
+      const desc = document.createElement('div');
+      desc.className = 'open-in-card-desc';
+      desc.textContent = descText;
+      meta.appendChild(desc);
+    }
+
+    if (!available) {
+      const badge = document.createElement('span');
+      badge.className = 'open-in-badge';
+      badge.textContent = 'Not installed';
+      meta.appendChild(badge);
+    } else {
+      card.addEventListener('click', () => {
+        openProjectInTarget(appId);
+      });
+    }
+
+    card.appendChild(iconWrap);
+    card.appendChild(meta);
+    grid.appendChild(card);
+  });
+}
+
+async function openOpenInModal() {
+  if (!bridge || !selectedProjectId) return;
+  const p = allProjects.find(x => x.id === selectedProjectId);
+  if (!p) return;
+
+  const overlay = document.getElementById('open-in-overlay');
+  const dialog = document.getElementById('open-in-dialog');
+  const titleEl = document.getElementById('open-in-title');
+  const subEl = document.getElementById('open-in-subtitle');
+  const grid = document.getElementById('open-in-grid');
+  if (!overlay || !dialog || !titleEl || !subEl || !grid) return;
+
+  titleEl.textContent = 'Open Project In...';
+  subEl.textContent = p.title ? `Choose an app for "${p.title}".` : 'Choose an app for this project.';
+  grid.innerHTML = '<div class="open-in-empty">Loading apps...</div>';
+  overlay.classList.add('active');
+  openInOpen = true;
+
+  if (animationsEnabled) {
+    gsap.fromTo(dialog, { opacity: 0, y: 14, scale: 0.985 }, { opacity: 1, y: 0, scale: 1, duration: 0.18, ease: 'power2.out' });
+  }
+
+  try {
+    const payload = await callBridge('listOpenInTargets', [p.type || 'Other'], 15000);
+    const parsed = parseJsonPayload(payload, []);
+    openInTargets = Array.isArray(parsed) ? parsed : [];
+    renderOpenInModalTargets(openInTargets);
+  } catch (e) {
+    openInTargets = [];
+    grid.innerHTML = '<div class="open-in-empty">Could not load apps.</div>';
+  }
+}
+
+async function openProjectInTarget(appId) {
+  if (!bridge || !selectedProjectId || !appId) return;
+  const p = allProjects.find(x => x.id === selectedProjectId);
+  if (!p) return;
+
+  const rootPath = String(p.root_path || '');
+  const mainFile = String(p.main_file || '');
+  try {
+    const ok = await callBridge('openInApp', [String(appId), rootPath, mainFile], 30000);
+    if (!ok) return;
+    const target = openInTargets.find(x => String(x?.id || '') === String(appId));
+    const label = String(target?.label || appId);
+    closeOpenInModal(true);
+    showToast(`Opened in ${label}`);
+  } catch (e) {
+    showToast('Open In failed', true);
+  }
+}
+
+function openFolder() {
+  if (!bridge || !selectedProjectId) return;
+  const p = allProjects.find(x => x.id === selectedProjectId);
+  if (p) bridge.openPath(p.root_path);
+}
+
+function openProject() {
+  if (!bridge || !selectedProjectId) return;
+  const p = allProjects.find(x => x.id === selectedProjectId);
+  if (!p) return;
+  if (p.main_file) bridge.openFile(p.main_file);
+  else bridge.openPath(p.root_path);
+}
+
+function copyPath() {
+  const p = allProjects.find(x => x.id === selectedProjectId);
+  if (!p) return;
+  navigator.clipboard.writeText(p.root_path).then(() => showToast('Path copied'));
+}
+
+async function deleteProject() {
+  if (!bridge || !selectedProjectId) return;
+  const p = allProjects.find(x => x.id === selectedProjectId);
+  if (!p) return;
+  if (settings.confirmDelete !== false) {
+    const ok = await openConfirmDialog({
+      title: 'Delete Project',
+      message: `Delete "${p.title}" from the organizer? The project folder on disk stays untouched.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      danger: true,
+    });
+    if (!ok) return;
+  }
+  bridge.deleteProject(selectedProjectId);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   Theme
+   ═══════════════════════════════════════════════════════════════════ */
+function setTheme(name, skipSave) {
+  const allowedThemes = ['dark', 'light', 'purple'];
+  if (!allowedThemes.includes(name)) name = 'dark';
+  document.documentElement.setAttribute('data-theme', name);
+  document.querySelectorAll('.theme-card').forEach(card => {
+    card.classList.toggle('active', card.dataset.themeOption === name);
+  });
+  updateThreeColors();
+  if (!skipSave) saveCurrentSettings();
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   View Toggle
+   ═══════════════════════════════════════════════════════════════════ */
+function toggleView() {
+  currentView = currentView === 'grid' ? 'list' : 'grid';
+  renderProjects();
+  saveCurrentSettings();
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   Toast
+   ═══════════════════════════════════════════════════════════════════ */
+function showToast(msg, isError = false) {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = 'toast' + (isError ? ' toast-error' : '');
+  const icon = isError
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+  el.innerHTML = icon + `<span>${escHtml(msg)}</span>`;
+  container.appendChild(el);
+  if (animationsEnabled) {
+    gsap.fromTo(el, { opacity: 0, x: 30, scale: 0.95 }, { opacity: 1, x: 0, scale: 1, duration: 0.3, ease: 'back.out(1.2)' });
+  }
+  setTimeout(() => {
+    if (animationsEnabled) {
+      gsap.to(el, { opacity: 0, x: 30, duration: 0.25, onComplete: () => el.remove() });
+    } else {
+      el.remove();
+    }
+  }, 3000);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   Spotlight (Ctrl+K)
+   ═══════════════════════════════════════════════════════════════════ */
+function openConfirmDialog({
+  title = 'Confirm Action',
+  message = 'Are you sure?',
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
+  danger = true,
+} = {}) {
+  return new Promise((resolve) => {
+    if (confirmResolver) {
+      try { confirmResolver(false); } catch (e) {}
+      confirmResolver = null;
+    }
+
+    const overlay = document.getElementById('confirm-overlay');
+    const dialog = document.getElementById('confirm-dialog');
+    const titleEl = document.getElementById('confirm-title');
+    const msgEl = document.getElementById('confirm-message');
+    const okBtn = document.getElementById('confirm-ok-btn');
+    const cancelBtn = document.getElementById('confirm-cancel-btn');
+
+    if (!overlay || !dialog || !titleEl || !msgEl || !okBtn || !cancelBtn) {
+      resolve(false);
+      return;
+    }
+
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+    okBtn.textContent = confirmText;
+    cancelBtn.textContent = cancelText;
+    okBtn.classList.toggle('btn-danger', Boolean(danger));
+    confirmResolver = resolve;
+    overlay.classList.add('active');
+
+    if (animationsEnabled) {
+      gsap.fromTo(dialog, { opacity: 0, y: 12, scale: 0.98 }, { opacity: 1, y: 0, scale: 1, duration: 0.18, ease: 'power2.out' });
+    }
+
+    setTimeout(() => cancelBtn.focus(), 10);
+  });
+}
+
+function closeConfirmDialog(result) {
+  const overlay = document.getElementById('confirm-overlay');
+  const dialog = document.getElementById('confirm-dialog');
+  const resolver = confirmResolver;
+  confirmResolver = null;
+
+  if (!overlay) {
+    if (resolver) resolver(Boolean(result));
+    return;
+  }
+
+  const finish = () => {
+    overlay.classList.remove('active');
+    if (dialog) {
+      dialog.style.opacity = '';
+      dialog.style.transform = '';
+    }
+    if (resolver) resolver(Boolean(result));
+  };
+
+  if (!overlay.classList.contains('active') || !animationsEnabled || !dialog) {
+    finish();
+    return;
+  }
+  gsap.to(dialog, { opacity: 0, y: 8, scale: 0.98, duration: 0.14, ease: 'power2.in', onComplete: finish });
+}
+
+function openSpotlight() {
+  const overlay = document.getElementById('spotlight-overlay');
+  overlay.classList.add('active');
+  document.getElementById('spotlight-input').value = '';
+  document.getElementById('spotlight-results').innerHTML = '';
+  if (animationsEnabled) {
+    gsap.fromTo('#spotlight-box', { opacity: 0, y: -20, scale: 0.97 }, { opacity: 1, y: 0, scale: 1, duration: 0.25, ease: 'power2.out' });
+  }
+  setTimeout(() => document.getElementById('spotlight-input').focus(), 50);
+}
+
+function closeSpotlight() {
+  const overlay = document.getElementById('spotlight-overlay');
+  if (!animationsEnabled) {
+    overlay.classList.remove('active');
+    return;
+  }
+  gsap.to('#spotlight-box', { opacity: 0, y: -20, duration: 0.15, onComplete: () => overlay.classList.remove('active') });
+}
+
+document.getElementById('spotlight-input').addEventListener('input', function() {
+  const q = this.value.toLowerCase();
+  const results = document.getElementById('spotlight-results');
+  if (!q) { results.innerHTML = ''; return; }
+  const matches = allProjects.filter(p =>
+    (p.title || '').toLowerCase().includes(q) ||
+    (p.tags || '').toLowerCase().includes(q) ||
+    (p.root_path || '').toLowerCase().includes(q)
+  ).slice(0, 8);
+  results.innerHTML = matches.map(p => `
+    <div class="spotlight-item" onclick="selectFromSpotlight(${p.id})">
+      ${getTypeIcon(p.type)}
+      <span>${escHtml(p.title)}</span>
+    </div>
+  `).join('');
+});
+
+function selectFromSpotlight(id) {
+  closeSpotlight();
+  setMainTab('projects');
+  selectProject(id);
+  // scroll card into view
+  setTimeout(() => {
+    const card = document.querySelector(`.project-card[data-id="${id}"]`);
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 200);
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target && e.target.closest('.card-kebab-wrap')) return;
+  closeCardKebabMenus();
+});
+
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    const overlay = document.getElementById('spotlight-overlay');
+    if (overlay.classList.contains('active')) closeSpotlight();
+    else openSpotlight();
+  }
+  if (e.key === 'Escape') {
+    const hasOpenCardMenu = document.querySelector('.card-kebab-wrap.open');
+    if (hasOpenCardMenu) {
+      e.preventDefault();
+      closeCardKebabMenus();
+      return;
+    }
+    const confirmOverlay = document.getElementById('confirm-overlay');
+    if (confirmOverlay && confirmOverlay.classList.contains('active')) {
+      e.preventDefault();
+      closeConfirmDialog(false);
+      return;
+    }
+    const openInOverlay = document.getElementById('open-in-overlay');
+    if (openInOverlay && openInOverlay.classList.contains('active')) {
+      e.preventDefault();
+      closeOpenInModal(false);
+      return;
+    }
+    const overlay = document.getElementById('spotlight-overlay');
+    if (overlay.classList.contains('active')) closeSpotlight();
+  }
+});
+
+
+const dropOverlay = document.getElementById('drop-overlay');
+let dragCounter = 0;
+
+document.addEventListener('dragenter', (e) => {
+  e.preventDefault();
+  if (currentTab !== 'projects') return;
+  dragCounter++;
+  dropOverlay.classList.add('active');
+});
+document.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  if (currentTab !== 'projects') return;
+  dragCounter--;
+  if (dragCounter <= 0) { dragCounter = 0; dropOverlay.classList.remove('active'); }
+});
+document.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  if (currentTab !== 'projects') return;
+});
+document.addEventListener('drop', (e) => {
+  e.preventDefault();
+  if (currentTab !== 'projects') return;
+  dragCounter = 0;
+  dropOverlay.classList.remove('active');
+  // Browser-side fallback; native Qt drop handling is primary.
+  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+    for (const file of Array.from(e.dataTransfer.files)) {
+      if (file && file.path) {
+        bridge && bridge.addProjectByFolder(file.path);
+      }
+    }
+  }
+});
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   Utils
+   ═══════════════════════════════════════════════════════════════════ */
+function escHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   Card Hover Microinteractions (GSAP)
+   ═══════════════════════════════════════════════════════════════════ */
+document.addEventListener('mouseenter', (e) => {
+  if (!animationsEnabled) return;
+  if (e.target.classList && e.target.classList.contains('project-card')) {
+    gsap.to(e.target, { y: -3, duration: 0.2, ease: 'power2.out', boxShadow: '0 8px 30px rgba(0,0,0,0.15)' });
+  }
+}, true);
+document.addEventListener('mouseleave', (e) => {
+  if (!animationsEnabled) return;
+  if (e.target.classList && e.target.classList.contains('project-card')) {
+    gsap.to(e.target, { y: 0, duration: 0.2, ease: 'power2.out', boxShadow: 'none' });
+  }
+}, true);
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   Init
+   ═══════════════════════════════════════════════════════════════════ */
+async function init() {
+  showStartupLoader('Preparing Project Organizer');
+  try {
+    setLoaderStatus('Connect backend...', 0, 6, true);
+    await initBridge();
+    setLoaderStatus('Load settings...', 1, 6, true);
+    await loadSettings();
+    setLoaderStatus('Initialize graphics...', 2, 6, true);
+    setBackgroundEnabled(settings.backgroundEnabled !== false, true);
+    setMainTab(currentTab, true);
+    if (!settings.theme) setTheme('dark', true);
+    syncSettingsControlsFromState();
+    updateBackupSettingsUi();
+    setLoaderStatus('Sync backup files...', 3, 6, true);
+    if (settings.autoBackupOnStartup !== false) {
+      await runBackupSync(false, 20000);
+    } else {
+      setLoaderStatus('Startup backup disabled in settings.', 3, 6, true);
+    }
+    setLoaderStatus('Load projects...', 4, 6, true);
+    await loadProjects();
+    autoFixHiddenProjectsOnStartup();
+    setLoaderStatus('Load ideas...', 5, 6, true);
+    await loadIdeas();
+    startNewIdea(true);
+    renderProjects();
+    renderIdeas(false);
+    setLoaderStatus('Finalize startup...', 6, 6, true);
+  } catch (err) {
+    setLoaderStatus(`Startup error: ${err}`, 0, 0, true);
+    showToast('Startup failed. Check settings and try again.', true);
+  } finally {
+    hideStartupLoader();
+    if (animationsEnabled) {
+      gsap.to('#app', { opacity: 1, duration: 0.5, ease: 'power2.out' });
+      gsap.fromTo('#sidebar', { x: -20, opacity: 0 }, { x: 0, opacity: 1, duration: 0.4, delay: 0.1, ease: 'power2.out' });
+      gsap.fromTo('#topbar', { y: -10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, delay: 0.15, ease: 'power2.out' });
+      setTimeout(() => resizeThreeRenderer(true), 450);
+    } else {
+      const appEl = document.getElementById('app');
+      if (appEl) appEl.style.opacity = '1';
+      resizeThreeRenderer(true);
+    }
+    setTimeout(() => {
+      checkLauncherHtmlUpdateOnStartup();
+    }, animationsEnabled ? 620 : 180);
+  }
+}
+
+init();
+</script>
 </body>
 </html>
-
